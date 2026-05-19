@@ -36,3 +36,61 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## RAG Chatbot Backend
+
+This project now includes a basic RAG backend at `POST /api/chat`.
+
+### Knowledge source
+
+Knowledge files are in `data/knowledge/*.md`:
+
+- `store-profile.md`
+- `menu-highlights.md`
+- `order-policy.md`
+
+Edit these files to update what the bot can answer about your shop.
+
+### Environment variables
+
+Copy `.env.example` to `.env.local` and set values as needed. Keep `.env.local` out of version control:
+
+```bash
+GOOGLE_API_KEY=your_google_key_here
+RAG_GOOGLE_MODEL=gemini-2.0-flash
+RAG_CONFIDENCE_THRESHOLD=0.18
+```
+
+This project is configured to use Gemini only. If you want OpenAI fallback, add `OPENAI_API_KEY` and `RAG_OPENAI_MODEL`.
+
+If model API keys are missing, the endpoint still works with a local fallback answer generator.
+
+`RAG_CONFIDENCE_THRESHOLD` is used as a guardrail. If retrieved confidence is lower than this threshold, the API will refuse to answer outside shop knowledge and return a guarded response.
+
+### API request example
+
+```bash
+curl -X POST http://localhost:3000/api/chat \
+	-H "Content-Type: application/json" \
+	-d '{
+		"message": "ร้านเปิดกี่โมง และมีเมนูแนะนำอะไรบ้าง",
+		"history": []
+	}'
+```
+
+Response shape:
+
+```json
+{
+	"answer": "...",
+	"sources": [
+		{
+			"id": "store-profile-1",
+			"source": "store-profile.md",
+			"title": "ข้อมูลร้าน YummyYummy Cafe",
+			"score": 0.73,
+			"excerpt": "..."
+		}
+	]
+}
+```

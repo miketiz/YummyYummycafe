@@ -1,65 +1,228 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import Image from "next/image";
+import Link from "next/link";
+import { useMemo, useState } from "react";
+import { motion } from "motion/react";
+import { ChevronDown, Menu, ShoppingCart, Wheat } from "lucide-react";
+import { Toaster, toast } from "sonner";
+import { ChatWidget } from "@/components/home/chat-widget";
+import { MenuCard } from "@/components/home/menu-card";
+import {
+  bakery,
+  beverages,
+  features,
+  type CartItem,
+  type MenuItem,
+} from "@/components/home/menu-data";
+import { SectionHeader } from "@/components/home/section-header";
+
+export default function HomePage() {
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [showCart, setShowCart] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const totalItems = useMemo(
+    () => cart.reduce((sum, item) => sum + item.quantity, 0),
+    [cart],
+  );
+  const totalPrice = useMemo(
+    () => cart.reduce((sum, item) => sum + item.quantity * item.price, 0),
+    [cart],
+  );
+
+  const scrollTo = (id: string) => {
+    document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+    setMobileMenuOpen(false);
+  };
+
+  const addToCart = (item: MenuItem) => {
+    setCart((prev) => {
+      const existing = prev.find((v) => v.id === item.id);
+      if (existing) {
+        return prev.map((v) =>
+          v.id === item.id ? { ...v, quantity: v.quantity + 1 } : v,
+        );
+      }
+      return [...prev, { ...item, quantity: 1 }];
+    });
+    toast.success(`เพิ่ม ${item.name} แล้ว`, { description: `฿${item.price}` });
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
+    <div className="min-h-screen bg-background text-foreground">
+      <Toaster position="bottom-right" richColors />
+
+      <header className="fixed top-0 inset-x-0 z-50 bg-card/90 backdrop-blur border-b border-border">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between">
+          <button
+            onClick={() => scrollTo("top")}
+            className="flex items-center gap-2.5"
+          >
+            <span className="w-10 h-10 rounded-2xl bg-primary flex items-center justify-center">
+              <Wheat className="w-5 h-5 text-primary-foreground" />
+            </span>
+            <span className="font-heading text-xl">YummyYummy</span>
+          </button>
+
+          <nav className="hidden md:flex items-center gap-2">
+            {["bakery", "beverages", "about"].map((id) => (
+              <button
+                key={id}
+                onClick={() => scrollTo(id)}
+                className="px-4 py-2 rounded-full hover:bg-primary/15 transition"
+              >
+                {id === "bakery"
+                  ? "เบเกอรี่"
+                  : id === "beverages"
+                    ? "เครื่องดื่ม"
+                    : "เกี่ยวกับเรา"}
+              </button>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowCart((v) => !v)}
+              className="px-3.5 py-2 rounded-full bg-primary text-primary-foreground flex items-center gap-2"
+            >
+              <ShoppingCart className="w-4 h-4" />
+              <span className="text-sm">{totalItems}</span>
+            </button>
+            <button
+              onClick={() => setMobileMenuOpen((v) => !v)}
+              className="md:hidden p-2 rounded-xl hover:bg-muted"
+              aria-label="toggle menu"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+        {mobileMenuOpen && (
+          <div className="md:hidden px-4 pb-3">
+            <div className="bg-card border border-border rounded-2xl p-2 flex flex-col">
+              <button onClick={() => scrollTo("bakery")} className="text-left px-3 py-2 rounded-xl hover:bg-muted">เบเกอรี่</button>
+              <button onClick={() => scrollTo("beverages")} className="text-left px-3 py-2 rounded-xl hover:bg-muted">เครื่องดื่ม</button>
+              <button onClick={() => scrollTo("about")} className="text-left px-3 py-2 rounded-xl hover:bg-muted">เกี่ยวกับเรา</button>
+            </div>
+          </div>
+        )}
+      </header>
+
+      <section id="top" className="relative min-h-[88vh] flex items-center justify-center overflow-hidden">
         <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
+          src="https://images.unsplash.com/photo-1759459981049-1a658da71c33?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1920"
+          alt="YummyYummy Bakery"
+          fill
           priority
+          sizes="100vw"
+          className="absolute inset-0 object-cover"
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+        <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-black/30 to-background" />
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8 }}
+          className="relative z-10 text-center px-4"
+        >
+          <p className="text-primary text-xs tracking-[0.28em] uppercase mb-4">Freshly Baked Daily</p>
+          <h1 className="text-white leading-tight font-heading text-[clamp(2.7rem,9vw,6.2rem)]">
+            YummyYummy
+            <span className="block italic text-primary font-normal">Bakery</span>
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-white/80 mt-4 max-w-2xl mx-auto">
+            เบเกอรี่คราฟท์อบสดทุกเช้า วัตถุดิบธรรมชาติ และรสชาติที่ตั้งใจในทุกชิ้น
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            onClick={() => scrollTo("bakery")}
+            className="mt-8 px-8 py-3 rounded-full bg-primary text-primary-foreground hover:opacity-90"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            สั่งเลย
+          </button>
+          <div className="mt-8 flex justify-center">
+            <ChevronDown className="text-white/70" />
+          </div>
+        </motion.div>
+      </section>
+
+      <section className="py-12 px-4 bg-card border-y border-border">
+        <div className="max-w-6xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6">
+          {features.map((feature) => (
+            <div key={feature.title} className="text-center flex flex-col items-center gap-2">
+              <div className="w-11 h-11 rounded-xl bg-primary/15 text-primary flex items-center justify-center">
+                <feature.icon className="w-5 h-5" />
+              </div>
+              <p className="font-heading">{feature.title}</p>
+              <p className="text-sm text-muted-foreground">{feature.desc}</p>
+            </div>
+          ))}
         </div>
-      </main>
+      </section>
+
+      <section id="bakery" className="py-18 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <SectionHeader en="Fresh from the oven" th="เบเกอรี่สด" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {bakery.map((item, index) => (
+              <MenuCard key={item.id} item={item} index={index} onAddToCart={addToCart} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="beverages" className="py-18 px-4 sm:px-6 lg:px-8 bg-secondary/25 border-y border-border">
+        <div className="max-w-6xl mx-auto">
+          <SectionHeader en="Crafted drinks" th="เครื่องดื่ม" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {beverages.map((item, index) => (
+              <MenuCard key={item.id} item={item} index={index} onAddToCart={addToCart} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="about" className="py-18 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-5xl mx-auto text-center">
+          <p className="text-primary text-xs uppercase tracking-[0.25em] mb-2">Our Story</p>
+          <h2 className="font-heading text-[clamp(1.9rem,4vw,2.8rem)]">YummyYummy Cafe</h2>
+          <p className="mt-4 text-muted-foreground leading-relaxed">
+            เราเริ่มจากความรักในขนมปัง และอยากให้ทุกเช้าของคุณมีความสุขขึ้นอีกนิด
+            ด้วยเบเกอรี่ที่อบใหม่ทุกวันและเครื่องดื่มที่จับคู่กันอย่างตั้งใจ
+          </p>
+          <div className="mt-6">
+            <Link
+              href="/admin"
+              className="inline-flex items-center px-5 py-2.5 rounded-full bg-primary text-primary-foreground hover:opacity-90"
+            >
+              ไปหน้า Admin
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {showCart && (
+        <aside className="fixed bottom-6 right-6 z-50 w-[min(92vw,360px)] bg-card border border-border rounded-3xl shadow-2xl p-5">
+          <p className="font-heading text-lg">ตะกร้าสินค้า</p>
+          {cart.length === 0 ? (
+            <p className="text-sm text-muted-foreground mt-2">ยังไม่มีสินค้าในตะกร้า</p>
+          ) : (
+            <div className="mt-3 space-y-2">
+              {cart.map((item) => (
+                <div key={item.id} className="flex items-center justify-between text-sm">
+                  <span className="truncate max-w-[72%]">{item.name} x {item.quantity}</span>
+                  <span>฿{item.quantity * item.price}</span>
+                </div>
+              ))}
+              <div className="border-t border-border pt-2 flex justify-between font-semibold">
+                <span>รวม</span>
+                <span>฿{totalPrice}</span>
+              </div>
+            </div>
+          )}
+        </aside>
+      )}
+
+      <ChatWidget />
     </div>
   );
 }
