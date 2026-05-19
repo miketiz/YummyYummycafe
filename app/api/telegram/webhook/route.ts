@@ -24,8 +24,8 @@ async function callInternalAI(question: string) {
     }
     const json = await res.json().catch(() => null);
     return json?.answer || null;
-  } catch (err) {
-    console.error("callInternalAI error", err);
+  } catch (error) {
+    console.error("callInternalAI error", error);
     return null;
   }
 }
@@ -43,8 +43,8 @@ async function sendTelegramMessage(chatId: number | string, text: string) {
       body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML" }),
     });
     return res.ok;
-  } catch (err) {
-    console.error("sendTelegramMessage error", err);
+  } catch (error) {
+    console.error("sendTelegramMessage error", error);
     return null;
   }
 }
@@ -55,15 +55,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let update: any;
+  let update: unknown;
   try {
     update = await req.json();
-  } catch (err) {
+  } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
   try {
-    const message = update.message || update.edited_message;
+    const payload = update as {
+      message?: { text?: string; chat?: { id?: number | string } };
+      edited_message?: { text?: string; chat?: { id?: number | string } };
+    };
+    const message = payload.message || payload.edited_message;
     const text = message?.text;
     const chatId = message?.chat?.id;
 
@@ -73,8 +77,8 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ ok: true });
-  } catch (err) {
-    console.error("telegram webhook handler error", err);
+  } catch (error) {
+    console.error("telegram webhook handler error", error);
     return NextResponse.json({ error: "internal error" }, { status: 500 });
   }
 }

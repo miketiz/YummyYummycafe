@@ -10,7 +10,8 @@ let chunkCachePromise: Promise<Awaited<ReturnType<typeof loadKnowledgeChunks>>> 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 
 export async function POST(request: Request) {
-  const headerToken = request.headers.get("x-internal-token") ||
+  const headerToken =
+    request.headers.get("x-internal-token") ||
     request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
 
   const expected = process.env.INTERNAL_AI_TOKEN;
@@ -18,15 +19,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: any;
+  let body: unknown;
   try {
     body = await request.json();
-  } catch (err) {
+  } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const question = typeof body?.question === "string" ? body.question : "";
-  const history = Array.isArray(body?.history) ? (body.history as ChatMessage[]) : [];
+  const payload = body as { question?: unknown; history?: unknown };
+  const question = typeof payload.question === "string" ? payload.question : "";
+  const history = Array.isArray(payload.history) ? (payload.history as ChatMessage[]) : [];
 
   if (!question) {
     return NextResponse.json({ error: "Missing question" }, { status: 400 });
@@ -42,8 +44,8 @@ export async function POST(request: Request) {
   try {
     const answer = await generateRagAnswer({ question, history, retrieved });
     return NextResponse.json({ answer });
-  } catch (err) {
-    console.error("internal/ai/process error", err);
+  } catch (error) {
+    console.error("internal/ai/process error", error);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

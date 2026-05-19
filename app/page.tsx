@@ -1,9 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { ChevronDown, Menu, ShoppingCart, Wheat } from "lucide-react";
+import { ChevronDown, Menu, ShoppingCart } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import { ChatWidget } from "@/components/home/chat-widget";
 import { MenuCard } from "@/components/home/menu-card";
@@ -83,15 +83,14 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <Toaster position="bottom-right" richColors />
-
       <header className="fixed top-0 inset-x-0 z-50 bg-card/90 backdrop-blur border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between">
           <button
             onClick={() => scrollTo("top")}
             className="flex items-center gap-2.5"
           >
-            <span className="w-10 h-10 rounded-2xl bg-primary flex items-center justify-center">
-              <Wheat className="w-5 h-5 text-primary-foreground" />
+            <span className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center">
+              <Image src="/logo.png" alt="YummyYummy Logo" width={50} height={50} />
             </span>
             <span className="font-heading text-xl">YummyYummy</span>
           </button>
