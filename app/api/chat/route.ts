@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { generateRagAnswer } from "@/lib/rag/generator";
 import { loadKnowledgeChunks } from "@/lib/rag/knowledge";
 import { retrieveRelevantChunks } from "@/lib/rag/retriever";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { ChatRequestBody } from "@/lib/rag/types";
 
 export const runtime = "nodejs";
@@ -16,6 +17,32 @@ const MAX_HISTORY_CONTENT_LENGTH = 2_000;
 type SanitizedChatMessage = {
   role: "user" | "assistant";
   content: string;
+};
+
+type OrderLookupResult = {
+  id: string;
+  order_number: string;
+  status: string;
+  total_price: number | string;
+  delivery_fee?: number | string | null;
+  delivery_type: "delivery" | "pickup";
+  payment_status: "unpaid" | "paid";
+  created_at: string;
+  customers?:
+    | {
+        name: string;
+        phone_number: string;
+      }
+    | Array<{
+        name: string;
+        phone_number: string;
+      }>
+    | null;
+  order_items?: Array<{
+    menu_item_name: string;
+    quantity: number;
+    unit_price: number;
+  }>;
 };
 
 function normalizeHistory(history: unknown): SanitizedChatMessage[] {
@@ -60,6 +87,181 @@ function isContactQuestion(message: string) {
   return /ติดต่อ|ช่องทางติดต่อ|เบอร์|ไลน์|line|instagram|facebook/i.test(
     message,
   );
+}
+
+function isOrderLookupQuestion(message: string) {
+  return /ยอดออเดอร์|ยอดสั่งซื้อ|เช็กออเดอร์|เช็คออเดอร์|สถานะออเดอร์|ออเดอร์นี้|เลขออเดอร์|order/i.test(
+    message,
+  );
+}
+
+function normalizePhoneNumber(message: string) {
+  const digits = message.replace(/\D/g, "");
+  const match = digits.match(/0\d{8,9}/);
+  return match?.[0] ?? null;
+}
+
+function normalizeOrderNumber(message: string) {
+  const compact = message.toUpperCase().replace(/\s+/g, "");
+  const match = compact.match(/ORD-?\d{8}-?\d{3}/);
+
+  if (!match) {
+    return null;
+  }
+
+  return match[0].replace(/^ORD-?/, "ORD-").replace(/-?(\d{8})-?(\d{3})$/, "-$1-$2");
+}
+
+function hasOrderLookupIdentifier(message: string) {
+  return Boolean(normalizePhoneNumber(message) || normalizeOrderNumber(message));
+}
+
+function extractLookupIntent(messages: SanitizedChatMessage[]) {
+  const userTexts = messages
+    .filter((message) => message.role === "user")
+    .map((message) => message.content)
+    .slice(-4);
+
+  const combined = userTexts.join(" \n");
+  return {
+    phone: normalizePhoneNumber(combined),
+    orderNumber: normalizeOrderNumber(combined),
+  };
+}
+
+function isPositiveMatch(value: string | null | undefined) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function statusLabel(status: string) {
+  switch (status) {
+    case "pending":
+      return "รอยืนยัน";
+    case "confirmed":
+      return "ยืนยันแล้ว";
+    case "preparing":
+      return "กำลังเตรียม";
+    case "ready":
+      return "พร้อมส่ง";
+    case "delivered":
+      return "ส่งแล้ว";
+    case "cancelled":
+      return "ยกเลิกแล้ว";
+    default:
+      return status;
+  }
+}
+
+function toMoneyValue(value: number | string | null | undefined) {
+  const amount = Number(value ?? 0);
+  return Number.isFinite(amount) ? amount : 0;
+}
+
+function buildOrderLookupAnswer(order: OrderLookupResult) {
+  const items = order.order_items ?? [];
+  const customer = Array.isArray(order.customers)
+    ? order.customers[0]
+    : order.customers;
+  const totalPrice = toMoneyValue(order.total_price);
+  const deliveryFee = toMoneyValue(order.delivery_fee);
+  const subtotal = Math.max(totalPrice - deliveryFee, 0);
+  const itemSummary = items.length
+    ? items
+        .slice(0, 5)
+        .map((item) => `${item.menu_item_name} x ${item.quantity}`)
+        .join(", ")
+    : "ไม่มีรายการสินค้าในคำสั่งซื้อนี้";
+
+  return [
+    `ออเดอร์ ${order.order_number}`,
+    `สถานะ: ${statusLabel(order.status)}`,
+    `ยอดรวม: ฿${totalPrice.toFixed(0)}`,
+    deliveryFee > 0
+      ? `ค่าส่ง: ฿${deliveryFee.toFixed(0)}`
+      : null,
+    `ยอดสินค้า: ฿${subtotal.toFixed(0)}`,
+    `การชำระเงิน: ${order.payment_status === "paid" ? "ชำระแล้ว" : "รอชำระเงิน"}`,
+    `รูปแบบรับสินค้า: ${order.delivery_type === "delivery" ? "จัดส่ง" : "รับเอง"}`,
+    `รายการ: ${itemSummary}`,
+    customer ? `ลูกค้า: ${customer.name} (${customer.phone_number})` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+async function lookupOrderAnswer(
+  message: string,
+  history: SanitizedChatMessage[],
+) {
+  const { phone, orderNumber } = extractLookupIntent([
+    ...history,
+    { role: "user", content: message },
+  ]);
+
+  if (!isPositiveMatch(phone) && !isPositiveMatch(orderNumber)) {
+    return {
+      answer:
+        "กรุณาส่งเบอร์โทรหรือเลขออเดอร์ให้ผมก่อนครับ แล้วผมจะเช็กยอดและสถานะให้อีกครั้ง",
+      guarded: true,
+    };
+  }
+
+  const supabase = await createServerSupabaseClient();
+
+  let query = supabase
+    .from("orders")
+    .select(
+      `
+      id,
+      order_number,
+      status,
+      total_price,
+      delivery_fee,
+      delivery_type,
+      payment_status,
+      created_at,
+      customers(name, phone_number),
+      order_items(menu_item_name, quantity, unit_price)
+    `,
+    )
+    .order("created_at", { ascending: false });
+
+  if (isPositiveMatch(orderNumber)) {
+    query = query.eq("order_number", orderNumber);
+  } else if (isPositiveMatch(phone)) {
+    const { data: customer } = await supabase
+      .from("customers")
+      .select("id")
+      .eq("phone_number", phone)
+      .maybeSingle();
+
+    if (!customer) {
+      return {
+        answer: `ไม่พบออเดอร์ที่ผูกกับเบอร์ ${phone} ครับ`,
+        guarded: true,
+      };
+    }
+
+    query = query.eq("customer_id", customer.id);
+  }
+
+  query = query.limit(1);
+
+  const { data: order, error } = await query.maybeSingle();
+
+  if (error || !order) {
+    return {
+      answer: isPositiveMatch(orderNumber)
+        ? `ไม่พบออเดอร์เลข ${orderNumber} ครับ`
+        : `ไม่พบออเดอร์จากเบอร์ ${phone} ครับ`,
+      guarded: true,
+    };
+  }
+
+  return {
+    answer: buildOrderLookupAnswer(order as OrderLookupResult),
+    guarded: false,
+  };
 }
 
 function getAllKnowledgeLines(chunks: Awaited<ReturnType<typeof loadKnowledgeChunks>>) {
@@ -236,6 +438,17 @@ export async function POST(req: Request) {
         confidence: Number(topScore.toFixed(3)),
         threshold,
         guarded: false,
+      });
+    }
+
+    if (isOrderLookupQuestion(message) || hasOrderLookupIdentifier(message)) {
+      const orderLookup = await lookupOrderAnswer(message, normalizeHistory(body.history));
+      return NextResponse.json({
+        answer: orderLookup.answer,
+        sources: [],
+        confidence: 1,
+        threshold,
+        guarded: orderLookup.guarded,
       });
     }
 

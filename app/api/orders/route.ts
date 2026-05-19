@@ -189,6 +189,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const status = searchParams.get("status");
     const phone = searchParams.get("phone");
+    const orderNumber = searchParams.get("order_number");
     const limit = parseInt(searchParams.get("limit") || "50");
 
     const supabase = await createServerSupabaseClient();
@@ -221,6 +222,10 @@ export async function GET(req: NextRequest) {
       } else {
         return NextResponse.json({ data: [] });
       }
+    }
+
+    if (orderNumber) {
+      query = query.ilike("order_number", `%${orderNumber}%`);
     }
 
     const { data, error } = await query;

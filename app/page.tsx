@@ -7,6 +7,7 @@ import { ChevronDown, Menu, ShoppingCart, Wheat } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import { ChatWidget } from "@/components/home/chat-widget";
 import { MenuCard } from "@/components/home/menu-card";
+import { OrderStatusCheck } from "../components/home/order-status-check";
 import {
   bakery,
   beverages,
@@ -34,18 +35,31 @@ export default function HomePage() {
     [cart],
   );
 
-  // Measure cart box height whenever it opens or cart contents change
   useEffect(() => {
-    if (showCart) {
-      // Use RAF to ensure the element has rendered before measuring
-      requestAnimationFrame(() => {
-        if (cartRef.current) {
-          setCartHeight(cartRef.current.offsetHeight);
-        }
-      });
-    } else {
-      setCartHeight(0);
+    if (!showCart) {
+      return;
     }
+
+    const element = cartRef.current;
+    if (!element) {
+      return;
+    }
+
+    const updateHeight = () => {
+      setCartHeight(element.offsetHeight);
+    };
+
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(element);
+
+    const frame = requestAnimationFrame(() => {
+      setCartHeight(element.offsetHeight);
+    });
+
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, [showCart, cart]);
 
   const scrollTo = (id: string) => {
@@ -176,6 +190,8 @@ export default function HomePage() {
         </div>
       </section>
 
+      <OrderStatusCheck />
+
       <section id="bakery" className="py-18 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <SectionHeader en="Fresh from the oven" th="เบเกอรี่สด" />
@@ -272,7 +288,7 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Pass cartHeight so ChatWidget can position itself above the cart box */}
+          {/* Pass cartHeight so ChatWidget can position itself above the cart box */}
       <ChatWidget cartOffset={cartHeight} />
     </div>
   );

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, RefreshCw, Eye, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { Loader2, RefreshCw, CheckCircle, Clock, AlertCircle } from "lucide-react";
 
 type OrderData = {
   id: string;
@@ -51,12 +51,47 @@ export function OrderManagementPanel() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<OrderData | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [phoneQuery, setPhoneQuery] = useState("");
+  const [orderNumberQuery, setOrderNumberQuery] = useState("");
+  const filterStatusRef = useRef(filterStatus);
+  const phoneQueryRef = useRef(phoneQuery);
+  const orderNumberQueryRef = useRef(orderNumberQuery);
 
-  const fetchOrders = async () => {
+  useEffect(() => {
+    filterStatusRef.current = filterStatus;
+  }, [filterStatus]);
+
+  useEffect(() => {
+    phoneQueryRef.current = phoneQuery;
+  }, [phoneQuery]);
+
+  useEffect(() => {
+    orderNumberQueryRef.current = orderNumberQuery;
+  }, [orderNumberQuery]);
+
+  const fetchOrders = useCallback(async (overrides?: {
+    status?: string;
+    phone?: string;
+    orderNumber?: string;
+  }) => {
     try {
       setIsLoading(true);
-      const query = filterStatus === "all" ? "" : `?status=${filterStatus}`;
-      const res = await fetch(`/api/orders${query}`);
+      const params = new URLSearchParams();
+      const nextStatus = overrides?.status ?? filterStatusRef.current;
+      const nextPhone = overrides?.phone ?? phoneQueryRef.current;
+      const nextOrderNumber = overrides?.orderNumber ?? orderNumberQueryRef.current;
+
+      if (nextStatus !== "all") {
+        params.set("status", nextStatus);
+      }
+      if (nextPhone.trim()) {
+        params.set("phone", nextPhone.trim());
+      }
+      if (nextOrderNumber.trim()) {
+        params.set("order_number", nextOrderNumber.trim());
+      }
+
+      const res = await fetch(`/api/orders${params.toString() ? `?${params.toString()}` : ""}`);
 
       if (!res.ok) throw new Error("Failed to fetch orders");
 
@@ -68,11 +103,15 @@ export function OrderManagementPanel() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchOrders();
-  }, [filterStatus]);
+    const timeoutId = window.setTimeout(() => {
+      void fetchOrders();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [filterStatus, fetchOrders]);
 
   const updateOrderStatus = async (
     orderId: string,
@@ -144,6 +183,50 @@ export function OrderManagementPanel() {
         </button>
       </div>
 
+      {/* Search */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-card border border-border rounded-2xl p-4">
+        <label className="space-y-1">
+          <span className="text-xs font-medium text-muted-foreground">ค้นหาด้วยเบอร์โทร</span>
+          <input
+            value={phoneQuery}
+            onChange={(e) => setPhoneQuery(e.target.value)}
+            placeholder="เช่น 0899999999"
+            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </label>
+
+        <label className="space-y-1">
+          <span className="text-xs font-medium text-muted-foreground">ค้นหาด้วยเลขออเดอร์</span>
+          <input
+            value={orderNumberQuery}
+            onChange={(e) => setOrderNumberQuery(e.target.value)}
+            placeholder="เช่น ORD-20260519"
+            className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </label>
+
+        <div className="flex items-end gap-2">
+          <button
+            onClick={fetchOrders}
+            className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-xl hover:opacity-90"
+          >
+            ค้นหา
+          </button>
+          <button
+            onClick={() => {
+              setPhoneQuery("");
+              setOrderNumberQuery("");
+              setFilterStatus("all");
+              setSelectedOrder(null);
+              fetchOrders({ status: "all", phone: "", orderNumber: "" });
+            }}
+            className="px-4 py-2 bg-muted text-muted-foreground rounded-xl hover:bg-muted/80"
+          >
+            ล้าง
+          </button>
+        </div>
+      </div>
+
       {/* Status Filter */}
       <div className="flex gap-2 flex-wrap">
         {["all", "pending", "confirmed", "preparing", "ready", "delivered", "cancelled"].map(
@@ -165,7 +248,7 @@ export function OrderManagementPanel() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Orders List */}
-        <div className="lg:col-span-2 space-y-3 max-h-96 overflow-y-auto">
+        <div className="lg:col-span-2 space-y-3 max-h-[42rem] overflow-y-auto">
           {isLoading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="w-6 h-6 animate-spin text-primary" />

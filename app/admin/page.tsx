@@ -11,6 +11,7 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 import { AdminInstagram } from "@/components/admin/AdminInstagram";
+import { OrderManagementPanel } from "@/components/admin/AdminOrders";
 import { AdminMenu, type ScheduledPost } from "@/components/admin/AdminMenu";
 import { AdminOverview } from "@/components/admin/AdminOverview";
 
@@ -96,21 +97,23 @@ export default function AdminPage() {
           />
         )}
 
-        {(activeNav === "orders" || activeNav === "reports") && (
+        {activeNav === "orders" && (
+          <div className="max-w-7xl mx-auto px-6 py-8">
+            <OrderManagementPanel />
+          </div>
+        )}
+
+        {activeNav === "reports" && (
           <div className="max-w-5xl mx-auto px-6 py-8">
             <div className="flex flex-col items-center justify-center py-24 text-center">
               <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
-                {activeNav === "orders" ? (
-                  <ShoppingBag size={28} className="text-muted-foreground" />
-                ) : (
-                  <BarChart2 size={28} className="text-muted-foreground" />
-                )}
+                <BarChart2 size={28} className="text-muted-foreground" />
               </div>
               <h2
                 className="text-foreground mb-2"
                 style={{ fontFamily: "var(--font-heading)" }}
               >
-                {activeNav === "orders" ? "คำสั่งซื้อ" : "รายงาน"}
+                รายงาน
               </h2>
               <p className="text-sm text-muted-foreground">กำลังพัฒนา - เร็วๆ นี้</p>
             </div>

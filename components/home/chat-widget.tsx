@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Bot, Loader2, MessageCircle, Send, X } from "lucide-react";
+import { Bot, MessageCircle, Send, X } from "lucide-react";
 import { bakery, beverages, type MenuItem } from "./menu-data";
 
 type Source = {
@@ -56,6 +56,10 @@ function buildLocalMenuAnswer() {
   ].join("\n\n");
 }
 
+function createMessageId(prefix: "u" | "a") {
+  return `${prefix}-${crypto.randomUUID()}`;
+}
+
 interface ChatWidgetProps {
   /** Height (px) of the cart box when visible. Pass 0 when cart is hidden. */
   cartOffset?: number;
@@ -101,7 +105,7 @@ export function ChatWidget({ cartOffset = 0 }: ChatWidgetProps) {
     }
 
     const nextUserMessage: UiMessage = {
-      id: `u-${Date.now()}`,
+      id: createMessageId("u"),
       role: "user",
       content: message,
     };
@@ -144,7 +148,7 @@ export function ChatWidget({ cartOffset = 0 }: ChatWidgetProps) {
               : null;
 
           const aiMessage: UiMessage = {
-            id: `a-${Date.now()}`,
+            id: createMessageId("a"),
             role: "assistant",
             content: fallbackMenuAnswer ?? data.answer,
             guarded: data.guarded,
@@ -167,7 +171,7 @@ export function ChatWidget({ cartOffset = 0 }: ChatWidgetProps) {
           : null;
 
       const aiMessage: UiMessage = {
-        id: `a-${Date.now()}`,
+        id: createMessageId("a"),
         role: "assistant",
         content: fallbackMenuAnswer ?? data.answer,
         guarded: data.guarded,
@@ -179,7 +183,7 @@ export function ChatWidget({ cartOffset = 0 }: ChatWidgetProps) {
       setMessages((prev) => [
         ...prev,
         {
-          id: `a-${Date.now()}`,
+          id: createMessageId("a"),
           role: "assistant",
           content:
             "ขออภัย ระบบแชทมีปัญหาชั่วคราว ลองใหม่อีกครั้งได้เลย (ถ้าเพิ่งรีสตาร์ท ให้รอสักครู่ และเช็กว่า dev server ยังรันอยู่)",
