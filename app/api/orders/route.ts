@@ -20,6 +20,20 @@ interface CreateOrderInput {
   payment_method?: "cash" | "bank_transfer" | "promptpay";
 }
 
+function devErrorMeta(error: unknown) {
+  if (process.env.NODE_ENV === "production" || !error || typeof error !== "object") {
+    return {};
+  }
+
+  const err = error as { message?: string; code?: string; details?: string; hint?: string };
+  return {
+    details: err.message,
+    code: err.code,
+    meta: err.details,
+    hint: err.hint,
+  };
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as CreateOrderInput;
@@ -71,7 +85,7 @@ export async function POST(req: NextRequest) {
       if (customerError) {
         console.error("Customer creation error:", customerError);
         return NextResponse.json(
-          { error: "Failed to create customer" },
+          { error: "Failed to create customer", ...devErrorMeta(customerError) },
           { status: 500 }
         );
       }
@@ -117,7 +131,7 @@ export async function POST(req: NextRequest) {
     if (orderError) {
       console.error("Order creation error:", orderError);
       return NextResponse.json(
-        { error: "Failed to create order" },
+        { error: "Failed to create order", ...devErrorMeta(orderError) },
         { status: 500 }
       );
     }
@@ -137,7 +151,7 @@ export async function POST(req: NextRequest) {
     if (itemsError) {
       console.error("Order items creation error:", itemsError);
       return NextResponse.json(
-        { error: "Failed to create order items" },
+        { error: "Failed to create order items", ...devErrorMeta(itemsError) },
         { status: 500 }
       );
     }
@@ -158,8 +172,12 @@ export async function POST(req: NextRequest) {
     );
   } catch (error) {
     console.error("Order creation error:", error);
+    const details = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      {
+        error: "Internal server error",
+        ...(process.env.NODE_ENV !== "production" ? { details } : {}),
+      },
       { status: 500 }
     );
   }

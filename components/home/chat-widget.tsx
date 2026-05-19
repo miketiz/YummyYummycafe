@@ -56,7 +56,12 @@ function buildLocalMenuAnswer() {
   ].join("\n\n");
 }
 
-export function ChatWidget() {
+interface ChatWidgetProps {
+  /** Height (px) of the cart box when visible. Pass 0 when cart is hidden. */
+  cartOffset?: number;
+}
+
+export function ChatWidget({ cartOffset = 0 }: ChatWidgetProps) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -71,6 +76,17 @@ export function ChatWidget() {
   const listRef = useRef<HTMLDivElement>(null);
 
   const canSend = useMemo(() => input.trim().length > 0 && !isLoading, [input, isLoading]);
+
+  // Gap between cart box top edge and the chat button / panel
+  const GAP = 12; // px
+
+  // Base bottom values (matches the original fixed positioning)
+  const BASE_BTN_BOTTOM = 24;   // bottom-6  = 1.5rem = 24px
+  const BASE_PANEL_BOTTOM = 96; // bottom-24 = 6rem   = 96px
+
+  // When cart is open, shift both upward so they sit above the cart box
+  const btnBottom   = cartOffset > 0 ? BASE_BTN_BOTTOM   + cartOffset + GAP : BASE_BTN_BOTTOM;
+  const panelBottom = cartOffset > 0 ? BASE_PANEL_BOTTOM + cartOffset + GAP : BASE_PANEL_BOTTOM;
 
   const scrollToBottom = () => {
     requestAnimationFrame(() => {
@@ -110,11 +126,9 @@ export function ChatWidget() {
       if (!response.ok) {
         const text = await response.text().catch(() => "(no body)");
         console.warn("chat request failed:", response.status, text);
-        // Try to parse JSON error body if present
         try {
           const errJson = JSON.parse(text || "{}");
           const msg = errJson?.error?.message || errJson?.message || `Server error ${response.status}`;
-          // create a minimal fallback response shape
           const dataFallback: ApiChatResponse = {
             answer: msg,
             sources: [],
@@ -180,7 +194,10 @@ export function ChatWidget() {
   return (
     <>
       {open && (
-        <section className="fixed bottom-24 right-4 sm:right-6 z-50 w-[min(95vw,420px)] h-[min(72vh,620px)] bg-card border border-border rounded-3xl shadow-2xl flex flex-col overflow-hidden">
+        <section
+          style={{ bottom: panelBottom }}
+          className="fixed right-4 sm:right-6 z-50 w-[min(95vw,420px)] h-[min(72vh,620px)] bg-card border border-border rounded-3xl shadow-2xl flex flex-col overflow-hidden transition-[bottom] duration-300"
+        >
           <header className="px-4 py-3 border-b border-border bg-muted/40 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-xl bg-primary/20 grid place-content-center">
@@ -265,7 +282,8 @@ export function ChatWidget() {
 
       <button
         onClick={() => setOpen((prev) => !prev)}
-        className="fixed bottom-6 right-4 sm:right-6 z-50 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 grid place-content-center"
+        style={{ bottom: btnBottom }}
+        className="fixed right-4 sm:right-6 z-50 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 grid place-content-center transition-[bottom] duration-300"
         aria-label="toggle chat"
       >
         <MessageCircle className="w-5 h-5" />

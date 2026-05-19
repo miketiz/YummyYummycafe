@@ -13,6 +13,7 @@ export type MenuItem = {
   price: number;
   image: string;
   description: string;
+  emoji?: string;
   tag?: "bestseller" | "new";
 };
 
@@ -24,6 +25,7 @@ export const bakery: MenuItem[] = [
     name: "ครัวซองต์เนยแท้",
     nameEn: "Butter Croissant",
     price: 65,
+    emoji: "🥐",
     image:
       "https://images.unsplash.com/photo-1623334044303-241021148842?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=700",
     description: "กรอบนอกนุ่มใน ใช้เนยแท้ 100% อบสดทุกเช้า",
@@ -34,6 +36,7 @@ export const bakery: MenuItem[] = [
     name: "ซินนามอน โรล",
     nameEn: "Cinnamon Roll",
     price: 85,
+    emoji: "🌀",
     image:
       "https://images.unsplash.com/photo-1694632288834-17d86b340745?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=700",
     description: "หอมอบอวล ราดครีมชีสโฮมเมด",
@@ -44,6 +47,7 @@ export const bakery: MenuItem[] = [
     name: "ฟรุ๊ต ทาร์ต",
     nameEn: "Fresh Fruit Tart",
     price: 95,
+    emoji: "🥧",
     image:
       "https://images.unsplash.com/photo-1670819916757-e8d5935a6c65?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=700",
     description: "ทาร์ตผลไม้สด ครีมคัสตาร์ดเนียน",
@@ -54,6 +58,7 @@ export const bakery: MenuItem[] = [
     name: "ซาวร์โดว์",
     nameEn: "Sourdough Loaf",
     price: 180,
+    emoji: "🍞",
     image:
       "https://images.unsplash.com/photo-1602077812176-1bd3ff433d74?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=700",
     description: "หมักธรรมชาติ 24 ชั่วโมง เปลือกกรอบ",
@@ -66,6 +71,7 @@ export const beverages: MenuItem[] = [
     name: "มัทฉะลาเต้",
     nameEn: "Matcha Latte",
     price: 85,
+    emoji: "🍵",
     image:
       "https://images.unsplash.com/photo-1749280447307-31a68eb38673?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=700",
     description: "มัทฉะญี่ปุ่น ผสมนมโอ๊ตเนียนนุ่ม",
@@ -76,6 +82,7 @@ export const beverages: MenuItem[] = [
     name: "อเมริกาโน่เย็น",
     nameEn: "Iced Americano",
     price: 70,
+    emoji: "☕",
     image:
       "https://images.unsplash.com/photo-1549652127-2e5e59e86a7a?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=700",
     description: "คั่วสดทุกวัน กลิ่นหอมและบาลานซ์ดี",
@@ -85,6 +92,7 @@ export const beverages: MenuItem[] = [
     name: "สตรอว์เบอร์รี่ลาเต้",
     nameEn: "Strawberry Latte",
     price: 80,
+    emoji: "🍓",
     image:
       "https://images.unsplash.com/photo-1686638745403-d21193f16b2f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=700",
     description: "สตรอว์เบอร์รี่สด ผสมนมสด หวานกำลังดี",

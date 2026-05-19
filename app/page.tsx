@@ -1,8 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { ChevronDown, Menu, ShoppingCart, Wheat } from "lucide-react";
 import { Toaster, toast } from "sonner";
@@ -15,12 +14,16 @@ import {
   type CartItem,
   type MenuItem,
 } from "@/components/home/menu-data";
+import { OrderForm } from "@/components/home/order-form";
 import { SectionHeader } from "@/components/home/section-header";
 
 export default function HomePage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showCart, setShowCart] = useState(false);
+  const [showOrderModal, setShowOrderModal] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [cartHeight, setCartHeight] = useState(0);
+  const cartRef = useRef<HTMLElement>(null);
 
   const totalItems = useMemo(
     () => cart.reduce((sum, item) => sum + item.quantity, 0),
@@ -30,6 +33,20 @@ export default function HomePage() {
     () => cart.reduce((sum, item) => sum + item.quantity * item.price, 0),
     [cart],
   );
+
+  // Measure cart box height whenever it opens or cart contents change
+  useEffect(() => {
+    if (showCart) {
+      // Use RAF to ensure the element has rendered before measuring
+      requestAnimationFrame(() => {
+        if (cartRef.current) {
+          setCartHeight(cartRef.current.offsetHeight);
+        }
+      });
+    } else {
+      setCartHeight(0);
+    }
+  }, [showCart, cart]);
 
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
@@ -190,18 +207,21 @@ export default function HomePage() {
             ด้วยเบเกอรี่ที่อบใหม่ทุกวันและเครื่องดื่มที่จับคู่กันอย่างตั้งใจ
           </p>
           <div className="mt-6">
-            <Link
+            <a
               href="/admin"
               className="inline-flex items-center px-5 py-2.5 rounded-full bg-primary text-primary-foreground hover:opacity-90"
             >
               ไปหน้า Admin
-            </Link>
+            </a>
           </div>
         </div>
       </section>
 
       {showCart && (
-        <aside className="fixed bottom-6 right-6 z-50 w-[min(92vw,360px)] bg-card border border-border rounded-3xl shadow-2xl p-5">
+        <aside
+          ref={cartRef}
+          className="fixed bottom-6 left-6 md:left-auto md:right-6 z-50 w-[min(92vw,360px)] bg-card border border-border rounded-3xl shadow-2xl p-5"
+        >
           <p className="font-heading text-lg">ตะกร้าสินค้า</p>
           {cart.length === 0 ? (
             <p className="text-sm text-muted-foreground mt-2">ยังไม่มีสินค้าในตะกร้า</p>
@@ -217,12 +237,43 @@ export default function HomePage() {
                 <span>รวม</span>
                 <span>฿{totalPrice}</span>
               </div>
+              <div className="pt-3 flex gap-2">
+                <button
+                  onClick={() => setCart([])}
+                  className="flex-1 px-3 py-2 rounded-xl border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition"
+                >
+                  ล้างตะกร้า
+                </button>
+                <button
+                  onClick={() => { setShowCart(false); setShowOrderModal(true); }}
+                  className="flex-1 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 transition"
+                >
+                  ชำระเงิน →
+                </button>
+              </div>
             </div>
           )}
         </aside>
       )}
 
-      <ChatWidget />
+      {/* Order modal */}
+      {showOrderModal && (
+        <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-4xl max-h-[90vh] bg-background rounded-3xl shadow-2xl overflow-y-auto relative">
+            <button
+              onClick={() => setShowOrderModal(false)}
+              className="absolute top-4 right-4 z-10 w-9 h-9 rounded-xl bg-muted hover:bg-muted/80 grid place-content-center"
+              aria-label="close order form"
+            >
+              ✕
+            </button>
+            <OrderForm initialItems={cart.map((item) => ({ ...item }))} />
+          </div>
+        </div>
+      )}
+
+      {/* Pass cartHeight so ChatWidget can position itself above the cart box */}
+      <ChatWidget cartOffset={cartHeight} />
     </div>
   );
 }

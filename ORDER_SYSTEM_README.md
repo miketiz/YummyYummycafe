@@ -196,6 +196,31 @@ Content-Type: application/json
 }
 ```
 
+### Create Payment
+```bash
+POST /api/payments
+Content-Type: application/json
+
+{
+  "order_id": "uuid",
+  "amount": 180,
+  "payment_method": "promptpay",
+  "payment_status": "pending",
+  "payment_reference": "TRX123456"
+}
+```
+
+### Update Payment
+```bash
+PATCH /api/payments/{id}
+Content-Type: application/json
+
+{
+  "payment_status": "completed",
+  "payment_reference": "TRX123456"
+}
+```
+
 ### Cancel Order
 ```bash
 DELETE /api/orders/{id}

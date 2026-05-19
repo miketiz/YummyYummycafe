@@ -258,13 +258,16 @@ async function callGemini(
   const isQuotaExhausted = (bodyText: string) =>
     /Quota exceeded|RESOURCE_EXHAUSTED|free_tier/i.test(bodyText);
 
+  const isTransientGeminiError = (status: number) =>
+    status === 429 || status === 503 || status === 502 || status === 504;
+
   const maybeRetryAfter = async (response: Response) => {
-    if (response.status !== 429) {
+      if (!isTransientGeminiError(response.status)) {
       return null;
     }
 
     const bodyText = await response.text().catch(() => "(no body)");
-    if (isQuotaExhausted(bodyText) || bodyText === "(no body)") {
+      if (response.status === 429 && (isQuotaExhausted(bodyText) || bodyText === "(no body)")) {
       if (!geminiQuotaWarned) {
         console.warn(`RAG: Gemini quota exhausted for ${model}; skipping retries.`);
         geminiQuotaWarned = true;
@@ -273,19 +276,24 @@ async function callGemini(
     }
 
     const delayMs = getRetryDelayMs(response, bodyText);
-    const waitMs = delayMs > 0 ? delayMs : 1500;
+      const waitMs = delayMs > 0 ? delayMs : response.status === 503 ? 2000 : 1500;
     await new Promise((resolve) => setTimeout(resolve, waitMs));
     return bodyText;
   };
 
   try {
     let response = await runRequest();
+      let retryCount = 0;
 
-    if (!response.ok) {
+      while (!response.ok && retryCount < 1) {
       const retryBody = await maybeRetryAfter(response);
-      if (response.status === 429 && retryBody !== null && !isQuotaExhausted(retryBody)) {
+        if (retryBody !== null && isTransientGeminiError(response.status)) {
         response = await runRequest();
+          retryCount += 1;
+          continue;
       }
+
+        break;
     }
 
     if (!response.ok) {
