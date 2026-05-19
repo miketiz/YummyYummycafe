@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "seed": "node scripts/seed-orders.js"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.7.4",
