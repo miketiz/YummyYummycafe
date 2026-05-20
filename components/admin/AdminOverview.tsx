@@ -121,6 +121,14 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 function AreaSparkline({ dailySeries }: { dailySeries: SummaryResponse["dailySeries"] }) {
+  if (dailySeries.length === 0) {
+    return (
+      <div className="flex h-[200px] items-center justify-center rounded-2xl border border-dashed border-border bg-muted/20 text-sm text-muted-foreground">
+        ยังไม่มีข้อมูล
+      </div>
+    );
+  }
+
   const W = 500;
   const H = 160;
   const PAD = { top: 10, right: 10, bottom: 28, left: 36 };
@@ -169,6 +177,14 @@ function AreaSparkline({ dailySeries }: { dailySeries: SummaryResponse["dailySer
 }
 
 function HourlyBarChart({ hourlySeries }: { hourlySeries: SummaryResponse["hourlySeries"] }) {
+  if (hourlySeries.length === 0) {
+    return (
+      <div className="flex h-[190px] items-center justify-center rounded-2xl border border-dashed border-border bg-muted/20 text-sm text-muted-foreground">
+        ยังไม่มีข้อมูล
+      </div>
+    );
+  }
+
   const maxVal = Math.max(1, ...hourlySeries.map((d) => d.orders));
   const W = 500;
   const H = 160;
@@ -202,6 +218,14 @@ function HourlyBarChart({ hourlySeries }: { hourlySeries: SummaryResponse["hourl
 }
 
 function BarChartCustom({ topItems }: { topItems: SummaryResponse["topItems"] }) {
+  if (topItems.length === 0) {
+    return (
+      <div className="flex h-[190px] items-center justify-center rounded-2xl border border-dashed border-border bg-muted/20 text-sm text-muted-foreground">
+        ยังไม่มีข้อมูล
+      </div>
+    );
+  }
+
   const maxVal = Math.max(1, ...topItems.map((d) => d.revenue));
   const W = 500;
   const H = 170;
@@ -240,6 +264,14 @@ function BarChartCustom({ topItems }: { topItems: SummaryResponse["topItems"] })
 }
 
 function DonutChart({ bakeryRevenue, beverageRevenue }: { bakeryRevenue: number; beverageRevenue: number }) {
+  if (bakeryRevenue + beverageRevenue === 0) {
+    return (
+      <div className="flex h-[160px] items-center justify-center rounded-2xl border border-dashed border-border bg-muted/20 text-sm text-muted-foreground">
+        ยังไม่มีข้อมูล
+      </div>
+    );
+  }
+
   const total = Math.max(1, bakeryRevenue + beverageRevenue);
   const bakeryPct = bakeryRevenue / total;
   const beveragePct = beverageRevenue / total;
@@ -289,6 +321,36 @@ function DonutChart({ bakeryRevenue, beverageRevenue }: { bakeryRevenue: number;
 function toGoalPct(revenue: number) {
   return Math.min(100, Math.round((revenue / DAILY_GOAL) * 100));
 }
+
+const EMPTY_SUMMARY: SummaryResponse = {
+  asOf: new Date().toISOString(),
+  today: {
+    orders: 0,
+    revenue: 0,
+    paid: 0,
+    unpaid: 0,
+    statuses: {},
+  },
+  month: {
+    orders: 0,
+    revenue: 0,
+    paid: 0,
+    unpaid: 0,
+    statuses: {},
+  },
+  trends: {
+    dailyOrders: [],
+    dailyRevenue: [],
+    hourlyOrders: [],
+    bakeryRevenue: 0,
+    beverageRevenue: 0,
+  },
+  dailySeries: [],
+  hourlySeries: [],
+  topItems: [],
+  todayBestsellers: [],
+  recentOrders: [],
+};
 
 export function AdminOverview() {
   const [summary, setSummary] = useState<SummaryResponse | null>(null);
@@ -371,7 +433,7 @@ export function AdminOverview() {
     );
   }
 
-  const currentSummary = summary!;
+  const currentSummary = summary ?? EMPTY_SUMMARY;
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
@@ -472,7 +534,9 @@ export function AdminOverview() {
             <div className="h-full rounded-full bg-primary" style={{ width: `${goalPct}%` }} />
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            ยังขาดอีก ฿{Math.max(0, DAILY_GOAL - currentSummary.today.revenue).toLocaleString("th-TH")}
+            {currentSummary.today.revenue > 0
+              ? `ยังขาดอีก ฿${Math.max(0, DAILY_GOAL - currentSummary.today.revenue).toLocaleString("th-TH")}`
+              : "ยังไม่มีข้อมูล"}
           </p>
         </div>
 

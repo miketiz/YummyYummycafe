@@ -205,7 +205,7 @@ export function OrderManagementPanel() {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-foreground">จัดการออเดอร์</h2>
         <button
-          onClick={fetchOrders}
+          onClick={() => fetchOrders()}
           disabled={isLoading}
           className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-xl hover:bg-primary/20 disabled:opacity-50"
         >
@@ -238,7 +238,7 @@ export function OrderManagementPanel() {
 
         <div className="flex items-end gap-2">
           <button
-            onClick={fetchOrders}
+            onClick={() => fetchOrders()}
             className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-xl hover:opacity-90"
           >
             ค้นหา

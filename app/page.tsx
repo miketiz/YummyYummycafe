@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { ChevronDown, Menu, ShoppingCart } from "lucide-react";
 import { Toaster, toast } from "sonner";

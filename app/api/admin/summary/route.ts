@@ -15,7 +15,10 @@ type OrderRow = {
   customers?: {
     name: string;
     phone_number: string;
-  } | null;
+  } | Array<{
+    name: string;
+    phone_number: string;
+  }> | null;
   order_items?: Array<{
     id: string;
     menu_item_name: string;
@@ -95,7 +98,7 @@ export async function GET() {
       return NextResponse.json({ error: "Failed to load admin summary" }, { status: 500 });
     }
 
-    const rows = (orders || []) as OrderRow[];
+    const rows = (orders || []) as unknown as OrderRow[];
     const now = new Date();
     const todayStart = startOfBangkokDay(now);
     const monthStart = startOfBangkokMonth(now);
