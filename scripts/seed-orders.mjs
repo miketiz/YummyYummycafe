@@ -71,6 +71,16 @@ async function supabaseRequest(pathname, options = {}) {
 }
 
 async function insertCustomer(customer) {
+  // check existing by phone_number to avoid unique constraint errors
+  const phone = encodeURIComponent(customer.phone_number || "");
+  const existing = await supabaseRequest(
+    `customers?select=id,name,phone_number&phone_number=eq.${phone}`
+  );
+
+  if (existing && existing.length > 0) {
+    return existing[0];
+  }
+
   const [row] = await supabaseRequest("customers?select=id,name,phone_number", {
     method: "POST",
     headers: {
@@ -190,6 +200,120 @@ const seedOrders = [
     items: [
       { menu_item_name: "Banana Bread", menu_item_emoji: "🍞", quantity: 1, unit_price: 75 },
       { menu_item_name: "Espresso", menu_item_emoji: "☕", quantity: 2, unit_price: 55 },
+    ],
+  },
+  {
+    customer: {
+      phone_number: "0890000005",
+      name: "คุณอี",
+      address: "100/1 แขวงตัวอย่าง เขตเมือง",
+    },
+    order: {
+      delivery_type: "delivery",
+      delivery_address: "100/1 แขวงตัวอย่าง เขตเมือง",
+      delivery_fee: 50,
+      payment_method: "card",
+      payment_status: "paid",
+      notes: "ไม่มีน้ำตาล",
+    },
+    status: "delivered",
+    items: [
+      { menu_item_name: "Iced Latte", menu_item_emoji: "🧊☕", quantity: 1, unit_price: 95 },
+      { menu_item_name: "Chocolate Cookie", menu_item_emoji: "🍪", quantity: 2, unit_price: 40 },
+    ],
+  },
+  {
+    customer: {
+      phone_number: "0890000006",
+      name: "คุณเอฟ",
+      address: "ตึก B ห้อง 12",
+    },
+    order: {
+      delivery_type: "pickup",
+      payment_method: "card",
+      payment_status: "paid",
+      notes: "เอาแก้วผ้าได้ไหม",
+    },
+    status: "ready",
+    items: [
+      { menu_item_name: "Matcha Frappé", menu_item_emoji: "🍵", quantity: 1, unit_price: 120 },
+    ],
+  },
+  {
+    customer: {
+      phone_number: "0890000007",
+      name: "คุณจี",
+      address: "หมู่บ้านสวนสวย",
+    },
+    order: {
+      delivery_type: "delivery",
+      delivery_address: "หมู่บ้านสวนสวย",
+      delivery_fee: 35,
+      payment_method: "promptpay",
+      payment_status: "unpaid",
+      notes: "โทรก่อนมาส่ง",
+    },
+    status: "pending",
+    items: [
+      { menu_item_name: "Ham Sandwich", menu_item_emoji: "🥪", quantity: 2, unit_price: 85 },
+      { menu_item_name: "Orange Juice", menu_item_emoji: "🍊", quantity: 1, unit_price: 60 },
+    ],
+  },
+  {
+    customer: {
+      phone_number: "0890000008",
+      name: "คุณเอช",
+      address: "ชั้น 5 คอนโด X",
+    },
+    order: {
+      delivery_type: "delivery",
+      delivery_address: "ชั้น 5 คอนโด X",
+      delivery_fee: 30,
+      payment_method: "bank_transfer",
+      payment_status: "paid",
+      notes: "วางไว้หน้าห้อง",
+    },
+    status: "delivered",
+    items: [
+      { menu_item_name: "Vegan Salad", menu_item_emoji: "🥗", quantity: 1, unit_price: 110 },
+    ],
+  },
+  {
+    customer: {
+      phone_number: "0890000009",
+      name: "คุณไอ",
+      address: "ตลาดนัดกลางคืน",
+    },
+    order: {
+      delivery_type: "pickup",
+      payment_method: "cash",
+      payment_status: "paid",
+      notes: "รับที่ซุ้ม B",
+    },
+    status: "completed",
+    items: [
+      { menu_item_name: "Iced Americano", menu_item_emoji: "🧊☕", quantity: 2, unit_price: 70 },
+      { menu_item_name: "Cookie", menu_item_emoji: "🍪", quantity: 1, unit_price: 35 },
+    ],
+  },
+  {
+    customer: {
+      phone_number: "0890000010",
+      name: "คุณเจ",
+      address: "สวนสาธารณะ",
+    },
+    order: {
+      delivery_type: "delivery",
+      delivery_address: "สวนสาธารณะ",
+      delivery_fee: 45,
+      payment_method: "card",
+      payment_status: "paid",
+      notes: "ขอถ้วยแยกน้ำเชื่อม",
+    },
+    status: "confirmed",
+    items: [
+      { menu_item_name: "Cappuccino", menu_item_emoji: "☕", quantity: 1, unit_price: 85 },
+      { menu_item_name: "Lemon Tart", menu_item_emoji: "🍰", quantity: 1, unit_price: 95 },
     ],
   },
 ];

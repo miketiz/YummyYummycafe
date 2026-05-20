@@ -70,10 +70,11 @@ export async function PATCH(
       );
     }
 
-    // Cannot update cancelled or delivered orders
-    if (order.status === "cancelled" || order.status === "delivered") {
+    // Prevent changing the order `status` if it has been delivered or cancelled.
+    // Allow updating other fields (like payment_status or notes) even for delivered/cancelled orders.
+    if (body.status && (order.status === "cancelled" || order.status === "delivered")) {
       return NextResponse.json(
-        { error: `Cannot update a ${order.status} order` },
+        { error: `Cannot change status of a ${order.status} order` },
         { status: 400 }
       );
     }

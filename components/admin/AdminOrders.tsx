@@ -164,6 +164,37 @@ export function OrderManagementPanel() {
     }
   };
 
+  const updatePaymentStatus = async (orderId: string, paymentStatus: "unpaid" | "paid") => {
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payment_status: paymentStatus }),
+      });
+
+        if (!res.ok) {
+          const text = await res.text().catch(() => null);
+          console.error("Payment update failed:", res.status, text);
+          toast.error(text || "ไม่สามารถอัปเดตสถานะการชำระได้");
+          return;
+        }
+
+        const data = await res.json();
+        const updated = data.data;
+
+        setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, ...updated } : o)));
+
+        if (selectedOrder?.id === orderId) {
+          setSelectedOrder({ ...selectedOrder, payment_status: paymentStatus });
+        }
+
+        toast.success(paymentStatus === "paid" ? "มาร์กชำระเรียบร้อย" : "ล้างสถานะการชำระ");
+    } catch (error) {
+      console.error("Payment update error:", error);
+      toast.error("ไม่สามารถอัปเดตสถานะการชำระได้");
+    }
+  };
+
   const filteredOrders = filterStatus === "all" 
     ? orders 
     : orders.filter(o => o.status === filterStatus);
@@ -288,9 +319,25 @@ export function OrderManagementPanel() {
                     {order.order_items?.length || 0} รายการ •{" "}
                     {order.delivery_type === "delivery" ? "📍 จัดส่ง" : "🏪 รับเอง"}
                   </span>
-                  <span className="font-semibold text-foreground">
-                    ฿{order.total_price.toFixed(0)}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="font-semibold text-foreground">
+                      ฿{order.total_price.toFixed(0)}
+                    </span>
+                    {order.payment_status !== "paid" ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!window.confirm("มาร์กออเดอร์นี้เป็น 'ชำระแล้ว' ?")) return;
+                          void updatePaymentStatus(order.id, "paid");
+                        }}
+                        className="px-2 py-1 text-xs bg-green-50 text-green-700 rounded-lg"
+                      >
+                        ชำระแล้ว
+                      </button>
+                    ) : (
+                      <span className="text-xs text-green-600">ชำระแล้ว</span>
+                    )}
+                  </div>
                 </div>
 
                 <p className="text-xs text-muted-foreground mt-2">
@@ -362,15 +409,39 @@ export function OrderManagementPanel() {
             </div>
 
             {/* Payment Status */}
-            <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 rounded-lg text-sm">
-              {selectedOrder.payment_status === "paid" ? (
-                <CheckCircle className="w-4 h-4 text-green-600" />
+            <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 rounded-lg text-sm justify-between">
+              <div className="flex items-center gap-2">
+                {selectedOrder.payment_status === "paid" ? (
+                  <CheckCircle className="w-4 h-4 text-green-600" />
+                ) : (
+                  <Clock className="w-4 h-4 text-yellow-600" />
+                )}
+                <span className="text-muted-foreground">
+                  {selectedOrder.payment_status === "paid" ? "ชำระแล้ว" : "รอชำระเงิน"}
+                </span>
+              </div>
+
+              {selectedOrder.payment_status !== "paid" ? (
+                <button
+                  onClick={() => {
+                    if (!window.confirm("มาร์กออเดอร์นี้เป็น 'ชำระแล้ว' ?")) return;
+                    void updatePaymentStatus(selectedOrder.id, "paid");
+                  }}
+                  className="px-3 py-1 bg-green-600 text-white rounded-lg text-sm"
+                >
+                  มาร์กชำระแล้ว
+                </button>
               ) : (
-                <Clock className="w-4 h-4 text-yellow-600" />
+                <button
+                  onClick={() => {
+                    if (!window.confirm("ต้องการยกเลิกสถานะชำระ (กลับเป็น รอชำระเงิน)?")) return;
+                    void updatePaymentStatus(selectedOrder.id, "unpaid");
+                  }}
+                  className="px-3 py-1 bg-yellow-50 text-yellow-700 rounded-lg text-sm"
+                >
+                  ยกเลิกการชำระ
+                </button>
               )}
-              <span className="text-muted-foreground">
-                {selectedOrder.payment_status === "paid" ? "ชำระแล้ว" : "รอชำระเงิน"}
-              </span>
             </div>
 
             {/* Status Update */}
