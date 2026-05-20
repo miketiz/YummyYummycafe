@@ -90,8 +90,8 @@ export default function HomePage() {
             onClick={() => scrollTo("top")}
             className="flex items-center gap-2.5"
           >
-            <span className="w-10 h-10 rounded-2xl bg-primary flex items-center justify-center">
-              <Wheat className="w-5 h-5 text-primary-foreground" />
+            <span className="w-11 h-11 rounded-2xl bg-primary/95 ring-1 ring-white/10 shadow-sm flex items-center justify-center">
+              <img src="/logo.png" alt="logo" className="w-8 h-8 object-contain drop-shadow-sm" />
             </span>
             <span className="font-heading text-xl">YummyYummy</span>
           </button>

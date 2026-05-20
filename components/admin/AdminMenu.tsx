@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   Plus, Trash2, Edit2, X, Check, Sparkles, Copy, CheckCheck,
   ImagePlus, Camera, ChevronDown, Send, Calendar,
@@ -111,7 +111,6 @@ function MenuSection({ items, setItems }: { items: MenuItem[]; setItems: (items:
 
   return (
     <div>
-      {/* Filter + Add */}
       <div className="flex items-center gap-3 mb-5 flex-wrap">
         <div className="flex rounded-xl overflow-hidden border border-border">
           {(["all", "bakery", "beverage"] as const).map((cat) => (
@@ -129,7 +128,6 @@ function MenuSection({ items, setItems }: { items: MenuItem[]; setItems: (items:
         </div>
       </div>
 
-      {/* Add form */}
       {showAdd && (
         <div className="bg-primary/10 border border-primary/30 rounded-2xl p-5 mb-5">
           <div className="flex items-center justify-between mb-4">
@@ -185,14 +183,12 @@ function MenuSection({ items, setItems }: { items: MenuItem[]; setItems: (items:
         </div>
       )}
 
-      {/* Stats bar */}
       <div className="flex gap-4 mb-4">
         <span className="text-xs text-muted-foreground">ทั้งหมด <strong className="text-foreground">{items.length}</strong> เมนู</span>
         <span className="text-xs text-muted-foreground">เบเกอรี่ <strong className="text-foreground">{bakery.length}</strong></span>
         <span className="text-xs text-muted-foreground">เครื่องดื่ม <strong className="text-foreground">{beverage.length}</strong></span>
       </div>
 
-      {/* Menu table */}
       <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
         <table className="w-full text-sm">
           <thead>
@@ -300,20 +296,40 @@ function InstagramSection({ items, scheduled, setScheduled }: InstagramSectionPr
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [captions, setCaptions] = useState<string[]>([]);
   const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [postedIdx, setPostedIdx] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [scheduleIdx, setScheduleIdx] = useState<number | null>(null);
   const [scheduleTime, setScheduleTime] = useState("");
+  const [unipostIdx, setUnipostIdx] = useState<number | null>(null);
+  const [unipostMessage, setUnipostMessage] = useState<string | null>(null);
+  const [customCaption, setCustomCaption] = useState("");
+  const CUSTOM_CAPTION_IDX = 999;
   const fileRef = useRef<HTMLInputElement>(null);
+  const nextScheduledId = useRef(1);
+
+  useEffect(() => {
+    nextScheduledId.current = Math.max(1, ...scheduled.map((post) => post.id)) + 1;
+  }, [scheduled]);
 
   const selectedItem = items.find((i) => i.id === selectedId) ?? items[0];
   const STYLES = ["แบบที่ 1 · Hype 🔥", "แบบที่ 2 · Morning vibe 🌿", "แบบที่ 3 · Brand story ❤️"];
 
+  const styleLabel = (idx: number) => STYLES[idx] ?? `AI option ${idx + 1}`;
+
   const handleFile = (file: File) => {
-    if (!file.type.startsWith("image/")) return;
+    if (!file.type.startsWith("image/")) {
+      setUnipostMessage("กรุณาเลือกไฟล์รูปภาพสำหรับโพสต์ Instagram");
+      return;
+    }
+    if (file.type !== "image/jpeg") {
+      setUnipostMessage("Instagram โพสต์ฟีดรองรับเฉพาะไฟล์ JPG/JPEG เท่านั้น");
+      return;
+    }
     setImageFile(file);
     setImageUrl(URL.createObjectURL(file));
+    setUnipostMessage(null);
   };
 
   const onDrop = useCallback((e: React.DragEvent) => {
@@ -323,16 +339,56 @@ function InstagramSection({ items, scheduled, setScheduled }: InstagramSectionPr
     if (file) handleFile(file);
   }, []);
 
-  const generate = () => {
+  const generate = async () => {
     if (!selectedItem) return;
     setGenerating(true);
     setCaptions([]);
+    setGenerateError(null);
     setPostedIdx(null);
     setScheduleIdx(null);
-    setTimeout(() => {
+
+    try {
+      const response = await fetch("/api/admin/captions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          item: {
+            name: selectedItem.name,
+            nameEn: selectedItem.nameEn,
+            price: selectedItem.price,
+            category: selectedItem.category,
+            tag: selectedItem.tag,
+          },
+          hasImage: Boolean(imageUrl),
+          count: 5,
+        }),
+      });
+
+      const data = (await response.json()) as {
+        captions?: unknown;
+        error?: string;
+      };
+
+      if (!response.ok || !Array.isArray(data.captions)) {
+        throw new Error(data.error || "Cannot generate captions");
+      }
+
+      const nextCaptions = data.captions.filter(
+        (caption): caption is string => typeof caption === "string" && caption.trim().length > 0,
+      );
+
+      if (nextCaptions.length === 0) {
+        throw new Error("No captions returned");
+      }
+
+      setCaptions(nextCaptions);
+    } catch (error) {
+      console.error("Caption generation error:", error);
       setCaptions(CAPTION_TEMPLATES.map((fn) => fn(selectedItem.name, selectedItem.nameEn, selectedItem.price)));
+      setGenerateError("สร้างด้วย AI ไม่สำเร็จ เลยแสดง template สำรองให้ก่อน");
+    } finally {
       setGenerating(false);
-    }, 1200);
+    }
   };
 
   const copy = (text: string, idx: number) => {
@@ -343,42 +399,81 @@ function InstagramSection({ items, scheduled, setScheduled }: InstagramSectionPr
   };
 
   const postNow = async (caption: string, idx: number) => {
-    // Try Web Share API (works on mobile to share directly to IG app)
-    if (navigator.share) {
-      try {
-        const data: ShareData = { text: caption };
-        if (imageFile && navigator.canShare?.({ files: [imageFile] })) {
-          data.files = [imageFile];
-        }
-        await navigator.share(data);
-        setPostedIdx(idx);
-        setTimeout(() => setPostedIdx(null), 3000);
-        return;
-      } catch {
-        // user cancelled — fall through to manual flow
-      }
+    if (imageFile) {
+      await sendToUniPost(caption, idx, null);
+      return;
     }
-    // Desktop fallback: copy caption + open Instagram
-    await navigator.clipboard.writeText(caption);
-    window.open("https://www.instagram.com/", "_blank");
-    setPostedIdx(idx);
-    setTimeout(() => setPostedIdx(null), 4000);
+    setUnipostMessage("กรุณาอัปโหลดรูปสินค้าก่อนโพสไป Instagram ผ่าน UniPost");
   };
 
   const schedulePost = (caption: string, idx: number) => {
     if (!scheduleTime || !selectedItem) return;
     const post: ScheduledPost = {
-      id: Date.now(),
+      id: nextScheduledId.current++,
       itemName: selectedItem.name,
       itemEmoji: selectedItem.emoji,
       caption,
       scheduledAt: scheduleTime,
       imageUrl,
-      style: STYLES[idx],
+      style: styleLabel(idx),
     };
     setScheduled((prev) => [...prev, post].sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt)));
     setScheduleIdx(null);
     setScheduleTime("");
+  };
+
+  const formatUniPostError = (error: unknown) => {
+    const message = error instanceof Error ? error.message : "";
+    if (!message) return "ส่งโพสต์ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง";
+    if (message.includes("Missing UNIPOST_API_KEY")) return "ตั้งค่า UniPost ยังไม่ครบ กรุณาตรวจสอบคีย์ใน .env.local";
+    if (message.includes("No active Instagram account found")) return "ไม่พบบัญชี Instagram ที่เชื่อมต่ออยู่ใน UniPost";
+    if (message.includes("Instagram publishing requires an image file")) return "กรุณาอัปโหลดรูปก่อนส่งโพสต์";
+    if (message.includes("JPG/JPEG") || message.includes("JPEG")) return "Instagram โพสต์ฟีดต้องใช้ไฟล์ JPG/JPEG เท่านั้น";
+    if (message.includes("pre-publish validation")) return "UniPost ตรวจสอบก่อนโพสต์ไม่ผ่าน กรุณาเช็กชนิดไฟล์และลองใหม่";
+    if (message.includes("Failed to reserve UniPost media upload")) return "UniPost เตรียมอัปโหลดรูปไม่สำเร็จ กรุณาลองใหม่";
+    if (message.includes("Failed to upload image to UniPost")) return "อัปโหลดรูปไป UniPost ไม่สำเร็จ กรุณาลองใหม่";
+    if (message.includes("Failed to create UniPost post") || message.includes("Cannot create UniPost post")) return "สร้างโพสต์ใน UniPost ไม่สำเร็จ กรุณาลองใหม่";
+    if (message.includes("Failed to fetch") || message.includes("NetworkError") || message.includes("fetch")) return "เชื่อมต่อ UniPost ไม่ได้ กรุณาลองใหม่อีกครั้ง";
+    return message.length > 120 ? `${message.slice(0, 117)}...` : message;
+  };
+
+  const sendToUniPost = async (caption: string, idx: number, scheduledAt: string | null = scheduleTime) => {
+    if (!selectedItem) return;
+    setUnipostMessage(null);
+
+    if (!imageFile) {
+      setUnipostMessage("กรุณาอัปโหลดรูปสินค้าก่อนส่งไป UniPost");
+      return;
+    }
+    if (scheduledAt === "") {
+      setUnipostMessage("กรุณาเลือกวันและเวลาที่ต้องการโพสก่อน");
+      return;
+    }
+
+    setUnipostIdx(idx);
+
+    try {
+      const payload = new FormData();
+      payload.append("caption", caption);
+      if (scheduledAt) payload.append("scheduledAt", scheduledAt);
+      payload.append("itemName", selectedItem.name);
+      payload.append("style", styleLabel(idx));
+      payload.append("image", imageFile);
+
+      const response = await fetch("/api/admin/unipost", { method: "POST", body: payload });
+      const data = (await response.json()) as { ok?: boolean; error?: string };
+      if (!response.ok || !data.ok) throw new Error(data.error || "Cannot create UniPost post");
+
+      setUnipostMessage(scheduledAt ? "ส่งโพสไป UniPost เรียบร้อยแล้ว" : "โพสไป Instagram ผ่าน UniPost แล้ว");
+      if (!scheduledAt) { setPostedIdx(idx); setTimeout(() => setPostedIdx(null), 3000); }
+      setScheduleIdx(null);
+      setScheduleTime("");
+    } catch (error) {
+      console.error("UniPost submit error:", error);
+      setUnipostMessage(formatUniPostError(error));
+    } finally {
+      setUnipostIdx(null);
+    }
   };
 
   return (
@@ -402,7 +497,7 @@ function InstagramSection({ items, scheduled, setScheduled }: InstagramSectionPr
             <div className="relative">
               <select
                 value={selectedId}
-                onChange={(e) => { setSelectedId(Number(e.target.value)); setCaptions([]); setPostedIdx(null); }}
+                onChange={(e) => { setSelectedId(Number(e.target.value)); setCaptions([]); setGenerateError(null); setPostedIdx(null); }}
                 className="w-full bg-input-background border border-border rounded-xl px-4 py-2.5 text-sm appearance-none outline-none focus:ring-1 focus:ring-primary pr-10"
               >
                 <optgroup label="🥐 เบเกอรี่">
@@ -443,13 +538,7 @@ function InstagramSection({ items, scheduled, setScheduled }: InstagramSectionPr
               {imageUrl ? (
                 <div className="relative">
                   <div className="relative w-full h-52">
-                    <Image
-                      src={imageUrl}
-                      alt="preview"
-                      fill
-                      unoptimized
-                      className="object-cover rounded-lg"
-                    />
+                    <Image src={imageUrl} alt="preview" fill unoptimized className="object-cover rounded-lg" />
                   </div>
                   <button onClick={(e) => { e.stopPropagation(); setImageUrl(null); setImageFile(null); }}
                     className="absolute top-2 right-2 w-6 h-6 bg-black/50 rounded-full flex items-center justify-center text-white hover:bg-black/70">
@@ -460,11 +549,11 @@ function InstagramSection({ items, scheduled, setScheduled }: InstagramSectionPr
                 <div className="flex flex-col items-center gap-2 text-muted-foreground">
                   <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center"><ImagePlus size={20} /></div>
                   <p className="text-sm">วางรูปที่นี่ หรือคลิกเพื่อเลือก</p>
-                  <p className="text-xs">PNG, JPG, WEBP</p>
+                  <p className="text-xs">JPG / JPEG เท่านั้น</p>
                 </div>
               )}
             </div>
-            <input ref={fileRef} type="file" accept="image/*" className="hidden"
+            <input ref={fileRef} type="file" accept="image/jpeg,.jpg,.jpeg" className="hidden"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
           </div>
 
@@ -475,11 +564,20 @@ function InstagramSection({ items, scheduled, setScheduled }: InstagramSectionPr
               ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />กำลังสร้าง caption...</>
               : <><Sparkles size={16} />สร้าง Caption ด้วย AI ✨</>}
           </button>
+
+          {generateError && (
+            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{generateError}</div>
+          )}
+
+          {unipostMessage && (
+            <div className="rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground">{unipostMessage}</div>
+          )}
         </div>
 
-        {/* Right: captions */}
+        {/* Right: captions + custom caption */}
         <div className="flex flex-col gap-3">
-          {captions.length === 0 && !generating && (
+          {/* Empty state */}
+          {captions.length === 0 && !generating && !customCaption.trim() && (
             <div className="flex-1 flex flex-col items-center justify-center text-center py-16 bg-card rounded-2xl border border-border border-dashed">
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center mb-3">
                 <Camera size={24} className="text-pink-500" />
@@ -489,10 +587,11 @@ function InstagramSection({ items, scheduled, setScheduled }: InstagramSectionPr
             </div>
           )}
 
+          {/* Loading skeletons */}
           {generating && (
             <div className="flex flex-col gap-3">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="bg-card rounded-2xl border border-border p-4 animate-pulse">
+              {[0, 1, 2].map((i) => (
+                <div key={`skeleton-${i}`} className="bg-card rounded-2xl border border-border p-4 animate-pulse">
                   <div className="h-3 bg-muted rounded w-24 mb-3" />
                   <div className="space-y-2">
                     <div className="h-2.5 bg-muted rounded w-full" />
@@ -504,69 +603,108 @@ function InstagramSection({ items, scheduled, setScheduled }: InstagramSectionPr
             </div>
           )}
 
+          {/* Custom caption — เขียนเอง */}
+          <div className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">เขียนเอง ✏️</span>
+              <button onClick={() => { if (customCaption.trim()) copy(customCaption, CUSTOM_CAPTION_IDX); }}
+                className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg transition-colors ${copiedIdx === CUSTOM_CAPTION_IDX ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground hover:text-foreground"}`}>
+                {copiedIdx === CUSTOM_CAPTION_IDX ? <><CheckCheck size={12} /> Copied!</> : <><Copy size={12} /> Copy</>}
+              </button>
+            </div>
+            <textarea
+              value={customCaption}
+              onChange={(e) => setCustomCaption(e.target.value)}
+              placeholder="พิมพ์ caption ที่ต้องการโพส..."
+              rows={4}
+              maxLength={2200}
+              className="w-full bg-input-background border border-border rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary resize-none placeholder:text-muted-foreground/50"
+            />
+            <div className="flex gap-2 flex-wrap mt-3">
+              <button
+                onClick={() => postNow(customCaption, CUSTOM_CAPTION_IDX)}
+                disabled={!customCaption.trim()}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-medium transition-all ${
+                  postedIdx === CUSTOM_CAPTION_IDX
+                    ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                    : "bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+                }`}
+              >
+                {postedIdx === CUSTOM_CAPTION_IDX ? <><CheckCircle2 size={13} /> โพสแล้ว!</> : <><Send size={13} /> โพสเลย</>}
+              </button>
+              <button
+                onClick={() => setScheduleIdx(scheduleIdx === CUSTOM_CAPTION_IDX ? null : CUSTOM_CAPTION_IDX)}
+                disabled={!customCaption.trim()}
+                className={`flex items-center gap-1.5 py-2 px-3 rounded-xl text-xs font-medium border transition-colors ${
+                  scheduleIdx === CUSTOM_CAPTION_IDX
+                    ? "bg-primary/20 border-primary text-primary-foreground"
+                    : "border-border text-muted-foreground hover:text-foreground hover:bg-muted disabled:border-border/50 disabled:text-muted-foreground/50 disabled:cursor-not-allowed"
+                }`}
+              >
+                <Calendar size={13} /> นัดโพส
+              </button>
+            </div>
+            {scheduleIdx === CUSTOM_CAPTION_IDX && (
+              <div className="mt-3 flex gap-2 items-center flex-wrap border-t border-border pt-3">
+                <input type="datetime-local" value={scheduleTime} min={new Date().toISOString().slice(0, 16)}
+                  onChange={(e) => setScheduleTime(e.target.value)}
+                  className="flex-1 bg-input-background border border-border rounded-xl px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-primary" />
+                <button onClick={() => schedulePost(customCaption, CUSTOM_CAPTION_IDX)} disabled={!scheduleTime}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-xl text-xs font-medium hover:bg-primary/80 disabled:opacity-50 disabled:cursor-not-allowed">
+                  <Check size={12} /> บันทึก
+                </button>
+                <button onClick={() => sendToUniPost(customCaption, CUSTOM_CAPTION_IDX)} disabled={!scheduleTime || unipostIdx === CUSTOM_CAPTION_IDX}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 text-white rounded-xl text-xs font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed">
+                  {unipostIdx === CUSTOM_CAPTION_IDX ? <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> ส่งอยู่...</> : <><Send size={12} /> ส่งไป UniPost</>}
+                </button>
+                <button onClick={() => setScheduleIdx(null)} className="p-1.5 rounded-xl text-muted-foreground hover:text-foreground"><X size={13} /></button>
+              </div>
+            )}
+          </div>
+
+          {/* AI-generated captions */}
           {captions.map((caption, idx) => (
-            <div key={idx} className="bg-card rounded-2xl border border-border p-4 shadow-sm">
-              {/* Header */}
+            <div key={`caption-${idx}`} className="bg-card rounded-2xl border border-border p-4 shadow-sm">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{STYLES[idx]}</span>
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{styleLabel(idx)}</span>
                 <button onClick={() => copy(caption, idx)}
                   className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg transition-colors ${copiedIdx === idx ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground hover:text-foreground"}`}>
                   {copiedIdx === idx ? <><CheckCheck size={12} /> Copied!</> : <><Copy size={12} /> Copy</>}
                 </button>
               </div>
-
-              {/* Caption text */}
               <p className="text-sm text-foreground whitespace-pre-line leading-relaxed mb-4">{caption}</p>
-
-              {/* Action buttons */}
               <div className="flex gap-2 flex-wrap">
-                {/* Post Now */}
-                <button
-                  onClick={() => postNow(caption, idx)}
+                <button onClick={() => postNow(caption, idx)}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-medium transition-all ${
                     postedIdx === idx
                       ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
                       : "bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 text-white hover:opacity-90"
-                  }`}
-                >
-                  {postedIdx === idx
-                    ? <><CheckCircle2 size={13} /> โพสแล้ว! Caption คัดลอกแล้ว</>
-                    : <><Send size={13} /> โพสเลย</>}
+                  }`}>
+                  {postedIdx === idx ? <><CheckCircle2 size={13} /> โพสแล้ว! Caption คัดลอกแล้ว</> : <><Send size={13} /> โพสเลย</>}
                 </button>
-
-                {/* Schedule */}
-                <button
-                  onClick={() => setScheduleIdx(scheduleIdx === idx ? null : idx)}
+                <button onClick={() => setScheduleIdx(scheduleIdx === idx ? null : idx)}
                   className={`flex items-center gap-1.5 py-2 px-3 rounded-xl text-xs font-medium border transition-colors ${
                     scheduleIdx === idx
                       ? "bg-primary/20 border-primary text-primary-foreground"
                       : "border-border text-muted-foreground hover:text-foreground hover:bg-muted"
-                  }`}
-                >
+                  }`}>
                   <Calendar size={13} /> นัดโพส
                 </button>
               </div>
-
-              {/* Schedule picker */}
               {scheduleIdx === idx && (
                 <div className="mt-3 flex gap-2 items-center flex-wrap border-t border-border pt-3">
-                  <input
-                    type="datetime-local"
-                    value={scheduleTime}
-                    min={new Date().toISOString().slice(0, 16)}
+                  <input type="datetime-local" value={scheduleTime} min={new Date().toISOString().slice(0, 16)}
                     onChange={(e) => setScheduleTime(e.target.value)}
-                    className="flex-1 bg-input-background border border-border rounded-xl px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-primary"
-                  />
-                  <button
-                    onClick={() => schedulePost(caption, idx)}
-                    disabled={!scheduleTime}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-xl text-xs font-medium hover:bg-primary/80 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
+                    className="flex-1 bg-input-background border border-border rounded-xl px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-primary" />
+                  <button onClick={() => schedulePost(caption, idx)} disabled={!scheduleTime}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-xl text-xs font-medium hover:bg-primary/80 disabled:opacity-50 disabled:cursor-not-allowed">
                     <Check size={12} /> บันทึก
                   </button>
-                  <button onClick={() => setScheduleIdx(null)} className="p-1.5 rounded-xl text-muted-foreground hover:text-foreground">
-                    <X size={13} />
+                  <button onClick={() => sendToUniPost(caption, idx)} disabled={!scheduleTime || unipostIdx === idx}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 text-white rounded-xl text-xs font-medium hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed">
+                    {unipostIdx === idx ? <><div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> ส่งอยู่...</> : <><Send size={12} /> ส่งไป UniPost</>}
                   </button>
+                  <button onClick={() => setScheduleIdx(null)} className="p-1.5 rounded-xl text-muted-foreground hover:text-foreground"><X size={13} /></button>
                 </div>
               )}
             </div>
@@ -574,7 +712,6 @@ function InstagramSection({ items, scheduled, setScheduled }: InstagramSectionPr
         </div>
       </div>
 
-      {/* Scheduled confirmation banner */}
       {scheduled.length > 0 && (
         <div className="mt-6 flex items-center gap-3 p-4 bg-primary/10 border border-primary/30 rounded-2xl">
           <Calendar size={16} className="text-primary shrink-0" />
