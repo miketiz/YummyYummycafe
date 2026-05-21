@@ -25,6 +25,7 @@ export default function HomePage() {
   const [cartHeight, setCartHeight] = useState(0);
   const { bakery, beverages } = useMenuItems();
   const cartRef = useRef<HTMLElement>(null);
+  const availableMenuItems = useMemo(() => [...bakery, ...beverages], [bakery, beverages]);
 
   const totalItems = useMemo(
     () => cart.reduce((sum, item) => sum + item.quantity, 0),
@@ -275,7 +276,15 @@ export default function HomePage() {
             >
               ✕
             </button>
-            <OrderForm initialItems={cart.map((item) => ({ ...item }))} />
+            <OrderForm
+              initialItems={cart.map((item) => ({ ...item }))}
+              onOrderSuccess={() => {
+                setCart([]);
+                setShowCart(false);
+                setShowOrderModal(false);
+                setCartHeight(0);
+              }}
+            />
           </div>
         </div>
       )}
@@ -283,6 +292,16 @@ export default function HomePage() {
           {/* Pass cartHeight so ChatWidget can position itself above the cart box */}
       <ChatWidget
         cartOffset={showCart ? cartHeight : 0}
+        cartItems={cart}
+        menuItems={availableMenuItems}
+        onAddToCart={addToCart}
+        onOpenCart={() => setShowCart(true)}
+        onOrderSuccess={() => {
+          setCart([]);
+          setShowCart(false);
+          setShowOrderModal(false);
+          setCartHeight(0);
+        }}
         onOpenChat={() => {
           setShowCart(false);
           setCartHeight(0);

@@ -24,9 +24,10 @@ type OrderFormData = {
 
 interface OrderFormProps {
   initialItems?: OrderItem[];
+  onOrderSuccess?: () => void;
 }
 
-export function OrderForm({ initialItems = [] }: OrderFormProps) {
+export function OrderForm({ initialItems = [], onOrderSuccess }: OrderFormProps) {
   const [items, setItems] = useState<OrderItem[]>(initialItems);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [step, setStep] = useState<"menu" | "details">("menu");
@@ -232,6 +233,7 @@ export function OrderForm({ initialItems = [] }: OrderFormProps) {
       setShowPaymentForm(false);
       setGpsCoords(null);
       setStep("menu");
+      onOrderSuccess?.();
     } catch (error) {
       console.error("Order creation error:", error);
       toast.error("เกิดข้อผิดพลาดในการสั่งซื้อ");

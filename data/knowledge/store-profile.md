@@ -1,6 +1,6 @@
 # ข้อมูลร้าน YummyYummy Cafe
 
-ชื่อร้าน: YummyYummy Cafe (Artisan Bakery)
+ชื่อร้าน: YummyYummy Bakery (Artisan Bakery)
 
 คอนเซปต์ร้าน: เบเกอรี่คราฟท์และเครื่องดื่มที่ทำสดใหม่ทุกวัน เน้นวัตถุดิบธรรมชาติ ไม่มีสารกันบูด
 
@@ -19,9 +19,9 @@
 ## ช่องทางติดต่อ
 - โทรศัพท์: 0634365174
 - Line OA: @yummybakery
-- Instagram: @yummyyummy.bakery
+- Instagram: @yummybakery_1
 - Facebook: YummyYummy Bakery
-- เว็บไซต์: yummyyummy.cafe
+- เว็บไซต์: https://www.mmapp.me/
 
 ## จุดเด่นของร้าน
 - เบเกอรี่อบสดทุกวัน ใช้วัตถุดิบธรรมชาติ

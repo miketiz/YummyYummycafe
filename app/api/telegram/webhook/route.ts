@@ -168,9 +168,12 @@ function buildHelpMessage() {
     "- สรุปยอดเมื่อวาน",
     "- สรุปยอด 7 วัน",
     "- ออเดอร์ค้าง",
+    "- ออเดอร์ที่ยังไม่จัดส่ง",
     "- ออเดอร์ล่าสุด",
     "- เมนูขายดีวันนี้",
+    "- วันนี้มีออเดอร์กี่รายการ",
     "",
+    "พิมพ์เป็นภาษาธรรมชาติได้ เช่น “ช่วยบอกออเดอร์ที่ยังไม่จัดส่งที”",
     "บอท Telegram นี้สงวนไว้สำหรับหลังบ้านเท่านั้น ส่วนแชทหน้าเว็บยังเป็นโหมดลูกค้าเหมือนเดิม",
   ].join("\n");
 }
@@ -275,6 +278,22 @@ function buildOrderList(title: string, orders: OrderRecord[]) {
   ].join("\n");
 }
 
+function isHelpIntent(text: string) {
+  return /^\/?(start|help|commands)|ช่วย|คำสั่ง|ใช้ยังไง|ทำอะไรได้/i.test(text);
+}
+
+function isPendingOrderIntent(text: string) {
+  return /ค้าง|ยังไม่จัดส่ง|ยังไม่ได้จัดส่ง|ยังไม่ส่ง|รอส่ง|รอดำเนินการ|กำลังเตรียม|กำลังทำ|ต้องส่ง|ยังไม่เสร็จ|pending|confirmed|preparing|ready|undelivered|open\s*orders?/i.test(text);
+}
+
+function isRecentOrderIntent(text: string) {
+  return /ล่าสุด|ออเดอร์ใหม่|รายการใหม่|recent|last/i.test(text);
+}
+
+function isSalesIntent(text: string) {
+  return /สรุปยอด|ยอดขาย|รายได้|ขายได้|ยอดวันนี้|ยอดเมื่อวาน|กี่บาท|กี่ออเดอร์|เมนูขายดี|best|sales|revenue/i.test(text);
+}
+
 async function fetchOrders(start: Date, end: Date) {
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
@@ -355,18 +374,29 @@ async function fetchRecentOrders() {
 }
 
 async function buildAdminAnswer(text: string) {
-  if (/^\/?(start|help|commands)|ช่วย|คำสั่ง/i.test(text)) {
+  if (isHelpIntent(text)) {
     return buildHelpMessage();
   }
 
-  if (/ค้าง|รอดำเนินการ|pending|confirmed|preparing|ready/i.test(text)) {
+  if (isPendingOrderIntent(text)) {
     const orders = await fetchPendingOrders();
-    return buildOrderList("ออเดอร์ค้าง/กำลังดำเนินการ", orders);
+    return buildOrderList("ออเดอร์ที่ยังไม่จัดส่ง/กำลังดำเนินการ", orders);
   }
 
-  if (/ล่าสุด|recent|last/i.test(text)) {
+  if (isRecentOrderIntent(text)) {
     const orders = await fetchRecentOrders();
     return buildOrderList("ออเดอร์ล่าสุด", orders);
+  }
+
+  if (!isSalesIntent(text)) {
+    return [
+      "ผมยังตีความคำถามหลังบ้านนี้ไม่ชัดครับ",
+      "ลองถามเป็นคำสั่ง เช่น:",
+      "- ช่วยบอกออเดอร์ที่ยังไม่จัดส่งที",
+      "- สรุปยอดวันนี้",
+      "- ออเดอร์ล่าสุด",
+      "- เมนูขายดีวันนี้",
+    ].join("\n");
   }
 
   const range = getReportRange(text);

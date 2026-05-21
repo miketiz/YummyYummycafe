@@ -76,12 +76,13 @@ Set these environment variables in Vercel:
 ```bash
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token
 TELEGRAM_CHAT_ID=your_telegram_chat_id
+TELEGRAM_ORDER_CHAT_ID=optional_chat_id_for_new_order_alerts
 CRON_SECRET=random_secret_at_least_16_chars
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 ```
 
-`BOT_TOKEN` and `CHAT_ID` are also supported as fallback names.
+`BOT_TOKEN` and `CHAT_ID` are also supported as fallback names. New order notifications are sent immediately after an order is created. They use `TELEGRAM_ORDER_CHAT_ID` when set, otherwise they fall back to `TELEGRAM_CHAT_ID`, `CHAT_ID`, and `TELEGRAM_ADMIN_CHAT_IDS`.
 
 ### Telegram back-office webhook
 
