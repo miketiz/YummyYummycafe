@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, RefreshCw, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { Loader2, RefreshCw, CheckCircle, Clock, AlertCircle, CreditCard } from "lucide-react";
 
 type OrderData = {
   id: string;
@@ -53,6 +53,7 @@ export function OrderManagementPanel() {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [phoneQuery, setPhoneQuery] = useState("");
   const [orderNumberQuery, setOrderNumberQuery] = useState("");
+  const [updatingPaymentOrderId, setUpdatingPaymentOrderId] = useState<string | null>(null);
   const filterStatusRef = useRef(filterStatus);
   const phoneQueryRef = useRef(phoneQuery);
   const orderNumberQueryRef = useRef(orderNumberQuery);
@@ -139,6 +140,38 @@ export function OrderManagementPanel() {
     } catch (error) {
       console.error("Update error:", error);
       toast.error("ไม่สามารถอัปเดตสถานะได้");
+    }
+  };
+
+  const updatePaymentStatus = async (
+    orderId: string,
+    newPaymentStatus: "paid" | "unpaid"
+  ) => {
+    try {
+      setUpdatingPaymentOrderId(orderId);
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payment_status: newPaymentStatus }),
+      });
+
+      if (!res.ok) throw new Error("Failed to update payment status");
+
+      const data = await res.json();
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, ...data.data } : o))
+      );
+
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder({ ...selectedOrder, ...data.data });
+      }
+
+      toast.success(newPaymentStatus === "paid" ? "อัปเดตเป็นชำระเงินแล้ว" : "อัปเดตเป็นรอชำระเงิน");
+    } catch (error) {
+      console.error("Payment update error:", error);
+      toast.error("ไม่สามารถอัปเดตสถานะชำระเงินได้");
+    } finally {
+      setUpdatingPaymentOrderId(null);
     }
   };
 
@@ -366,15 +399,32 @@ export function OrderManagementPanel() {
             </div>
 
             {/* Payment Status */}
-            <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 rounded-lg text-sm">
-              {selectedOrder.payment_status === "paid" ? (
-                <CheckCircle className="w-4 h-4 text-green-600" />
-              ) : (
-                <Clock className="w-4 h-4 text-yellow-600" />
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 px-3 py-2 bg-muted/30 rounded-lg text-sm">
+                {selectedOrder.payment_status === "paid" ? (
+                  <CheckCircle className="w-4 h-4 text-green-600" />
+                ) : (
+                  <Clock className="w-4 h-4 text-yellow-600" />
+                )}
+                <span className="text-muted-foreground">
+                  {selectedOrder.payment_status === "paid" ? "ชำระแล้ว" : "รอชำระเงิน"}
+                </span>
+              </div>
+
+              {selectedOrder.payment_status !== "paid" && selectedOrder.status !== "cancelled" && (
+                <button
+                  onClick={() => updatePaymentStatus(selectedOrder.id, "paid")}
+                  disabled={updatingPaymentOrderId === selectedOrder.id}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {updatingPaymentOrderId === selectedOrder.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <CreditCard className="h-4 w-4" />
+                  )}
+                  ชำระเงินแล้ว
+                </button>
               )}
-              <span className="text-muted-foreground">
-                {selectedOrder.payment_status === "paid" ? "ชำระแล้ว" : "รอชำระเงิน"}
-              </span>
             </div>
 
             {/* Status Update */}
