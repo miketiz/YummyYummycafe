@@ -1,0 +1,621 @@
+import { useState, useRef, useCallback } from "react";
+import {
+  Plus, Trash2, Edit2, X, Check, Sparkles, Copy, CheckCheck,
+  ImagePlus, Instagram, ChevronDown, Send, Calendar, Clock,
+  ExternalLink, CheckCircle2,
+} from "lucide-react";
+
+export type MenuItem = {
+  id: number;
+  name: string;
+  nameEn: string;
+  price: number;
+  category: "bakery" | "beverage";
+  tag?: "bestseller" | "new" | "";
+  emoji: string;
+};
+
+const INITIAL_MENU: MenuItem[] = [
+  { id: 1, name: "ครัวซองต์เนยแท้", nameEn: "Butter Croissant", price: 65, category: "bakery", tag: "bestseller", emoji: "🥐" },
+  { id: 2, name: "ซินนามอน โรล", nameEn: "Cinnamon Roll", price: 85, category: "bakery", tag: "bestseller", emoji: "🌀" },
+  { id: 3, name: "ฟรุ๊ต ทาร์ต", nameEn: "Fruit Tart", price: 95, category: "bakery", tag: "new", emoji: "🥧" },
+  { id: 4, name: "ซาวร์โดว์", nameEn: "Sourdough", price: 180, category: "bakery", emoji: "🍞" },
+  { id: 5, name: "ดานิช พาสทรี", nameEn: "Danish Pastry", price: 75, category: "bakery", tag: "new", emoji: "🥮" },
+  { id: 6, name: "มัฟฟิน บลูเบอร์รี่", nameEn: "Blueberry Muffin", price: 70, category: "bakery", emoji: "🫐" },
+  { id: 7, name: "เอแคลร์ช็อกโกแลต", nameEn: "Chocolate Éclair", price: 90, category: "bakery", tag: "new", emoji: "🍫" },
+  { id: 8, name: "โฟกาชชาสมุนไพร", nameEn: "Herb Focaccia", price: 120, category: "bakery", emoji: "🫓" },
+  { id: 9, name: "สโคนครีม", nameEn: "Cream Scone", price: 75, category: "bakery", emoji: "🧁" },
+  { id: 10, name: "มาการองฝรั่งเศส", nameEn: "French Macaron", price: 110, category: "bakery", tag: "new", emoji: "🫠" },
+  { id: 11, name: "ลาเต้", nameEn: "Latte", price: 80, category: "beverage", emoji: "☕" },
+  { id: 12, name: "ชาเขียวมัทฉะ", nameEn: "Matcha Latte", price: 85, category: "beverage", emoji: "🍵" },
+  { id: 13, name: "ชาผลไม้", nameEn: "Fruit Tea", price: 70, category: "beverage", emoji: "🍹" },
+];
+
+const EMOJIS = ["🥐", "🌀", "🥧", "🍞", "🥮", "🫐", "🍫", "🫓", "🧁", "🫠", "☕", "🍵", "🍹", "🎂", "🍰", "🥞", "🧇", "🍩", "🍪", "🎉"];
+
+const CAPTION_TEMPLATES = [
+  (name: string, nameEn: string, price: number) =>
+    `✨ ${name} เพิ่งออกจากเตา! 🔥\nกรอบนอก นุ่มใน หอมกรุ่นทั่วร้าน เพียง ฿${price} เท่านั้น!\n\n📍 YummyYummy Bakery\n⏰ เปิด 07:00 - 18:00 น. ทุกวัน\n\n#YummyYummyBakery #${nameEn.replace(/\s/g, "")} #เบเกอรี่สด #ขนมอบ #FreshBaked #อร่อย`,
+
+  (name: string, nameEn: string, price: number) =>
+    `💚 Good morning with ${name}!\n\nเริ่มต้นเช้าวันใหม่ด้วยความอร่อยสดใหม่จากเตา ราคาเพียง ฿${price} 🌿\n\nสั่งล่วงหน้าได้ที่ DM นะคะ หรือมารับที่ร้านได้เลย 💌\n\n#YummyYummy #${nameEn.replace(/\s/g, "")} #BakeryThailand #GoodMorning #เบเกอรี่ #ของหวาน`,
+
+  (name: string, _nameEn: string, price: number) =>
+    `เราทำ ${name} ด้วยใจ ❤️🥐\n\nทุกชิ้นผ่านการคัดสรรวัตถุดิบอย่างพิถีพิถัน เพื่อให้คุณได้รับความอร่อยที่ดีที่สุด\n\n✅ ทำสดทุกวัน\n✅ ไม่มีสารกันบูด\n✅ ราคาเป็นมิตร ฿${price}\n\n#YummyYummyBakery #Handmade #Fresh #เบเกอรี่ #Bakery #ขนมไทย`,
+];
+
+function TagBadge({ tag }: { tag?: string }) {
+  if (!tag) return null;
+  const styles = tag === "bestseller"
+    ? "bg-amber-100 text-amber-700 border-amber-200"
+    : "bg-emerald-100 text-emerald-700 border-emerald-200";
+  return (
+    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${styles}`}>
+      {tag === "bestseller" ? "⭐ bestseller" : "🆕 new"}
+    </span>
+  );
+}
+
+type FormState = {
+  name: string;
+  nameEn: string;
+  price: string;
+  category: "bakery" | "beverage";
+  tag: "" | "bestseller" | "new";
+  emoji: string;
+};
+
+const EMPTY_FORM: FormState = { name: "", nameEn: "", price: "", category: "bakery", tag: "", emoji: "🥐" };
+
+// ── Menu Management section ────────────────────────────────
+
+function MenuSection({ items, setItems }: { items: MenuItem[]; setItems: (items: MenuItem[]) => void }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [editForm, setEditForm] = useState<FormState>(EMPTY_FORM);
+  const [filterCat, setFilterCat] = useState<"all" | "bakery" | "beverage">("all");
+
+  const bakery = items.filter((i) => i.category === "bakery");
+  const beverage = items.filter((i) => i.category === "beverage");
+  const displayed = filterCat === "all" ? items : filterCat === "bakery" ? bakery : beverage;
+
+  const addItem = () => {
+    if (!form.name || !form.price) return;
+    const newItem: MenuItem = {
+      id: Date.now(),
+      name: form.name,
+      nameEn: form.nameEn || form.name,
+      price: Number(form.price),
+      category: form.category,
+      tag: form.tag || undefined,
+      emoji: form.emoji,
+    };
+    setItems([...items, newItem]);
+    setForm(EMPTY_FORM);
+    setShowAdd(false);
+  };
+
+  const deleteItem = (id: number) => setItems(items.filter((i) => i.id !== id));
+
+  const startEdit = (item: MenuItem) => {
+    setEditingId(item.id);
+    setEditForm({ name: item.name, nameEn: item.nameEn, price: String(item.price), category: item.category, tag: item.tag || "", emoji: item.emoji });
+  };
+
+  const saveEdit = (id: number) => {
+    setItems(items.map((i) => i.id === id ? { ...i, ...editForm, price: Number(editForm.price), tag: editForm.tag || undefined } : i));
+    setEditingId(null);
+  };
+
+  return (
+    <div>
+      {/* Filter + Add */}
+      <div className="flex items-center gap-3 mb-5 flex-wrap">
+        <div className="flex rounded-xl overflow-hidden border border-border">
+          {(["all", "bakery", "beverage"] as const).map((cat) => (
+            <button key={cat} onClick={() => setFilterCat(cat)}
+              className={`px-4 py-1.5 text-sm transition-colors ${filterCat === cat ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-muted"}`}>
+              {cat === "all" ? "ทั้งหมด" : cat === "bakery" ? "🥐 เบเกอรี่" : "☕ เครื่องดื่ม"}
+            </button>
+          ))}
+        </div>
+        <div className="ml-auto">
+          <button onClick={() => { setShowAdd(true); setEditingId(null); }}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm hover:bg-primary/80 transition-colors">
+            <Plus size={15} /> เพิ่มเมนูใหม่
+          </button>
+        </div>
+      </div>
+
+      {/* Add form */}
+      {showAdd && (
+        <div className="bg-primary/10 border border-primary/30 rounded-2xl p-5 mb-5">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-foreground">เพิ่มเมนูใหม่</h3>
+            <button onClick={() => setShowAdd(false)} className="text-muted-foreground hover:text-foreground"><X size={16} /></button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">ชื่อเมนู (ไทย)*</label>
+              <div className="flex gap-2">
+                <select value={form.emoji} onChange={(e) => setForm({ ...form, emoji: e.target.value })}
+                  className="bg-input-background border border-border rounded-xl px-2 text-sm w-14">
+                  {EMOJIS.map((e) => <option key={e} value={e}>{e}</option>)}
+                </select>
+                <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  placeholder="เช่น ครัวซองต์เนยแท้" className="flex-1 bg-input-background border border-border rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary" />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">ชื่อเมนู (อังกฤษ)</label>
+              <input value={form.nameEn} onChange={(e) => setForm({ ...form, nameEn: e.target.value })}
+                placeholder="e.g. Butter Croissant" className="w-full bg-input-background border border-border rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">ราคา (฿)*</label>
+              <input type="number" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })}
+                placeholder="เช่น 85" className="w-full bg-input-background border border-border rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">หมวดหมู่</label>
+              <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value as "bakery" | "beverage" })}
+                className="w-full bg-input-background border border-border rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary">
+                <option value="bakery">🥐 เบเกอรี่</option>
+                <option value="beverage">☕ เครื่องดื่ม</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">แท็ก</label>
+              <select value={form.tag} onChange={(e) => setForm({ ...form, tag: e.target.value as FormState["tag"] })}
+                className="w-full bg-input-background border border-border rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary">
+                <option value="">ไม่มี</option>
+                <option value="bestseller">⭐ Bestseller</option>
+                <option value="new">🆕 New</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-2 mt-4 justify-end">
+            <button onClick={() => setShowAdd(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground border border-border rounded-xl">ยกเลิก</button>
+            <button onClick={addItem} className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-xl hover:bg-primary/80 flex items-center gap-1.5">
+              <Check size={14} /> บันทึกเมนู
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Stats bar */}
+      <div className="flex gap-4 mb-4">
+        <span className="text-xs text-muted-foreground">ทั้งหมด <strong className="text-foreground">{items.length}</strong> เมนู</span>
+        <span className="text-xs text-muted-foreground">เบเกอรี่ <strong className="text-foreground">{bakery.length}</strong></span>
+        <span className="text-xs text-muted-foreground">เครื่องดื่ม <strong className="text-foreground">{beverage.length}</strong></span>
+      </div>
+
+      {/* Menu table */}
+      <div className="bg-card rounded-2xl border border-border overflow-hidden shadow-sm">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-muted/40 border-b border-border">
+              <th className="px-5 py-3 text-left text-xs text-muted-foreground font-medium">เมนู</th>
+              <th className="px-5 py-3 text-left text-xs text-muted-foreground font-medium hidden sm:table-cell">ชื่อ EN</th>
+              <th className="px-5 py-3 text-center text-xs text-muted-foreground font-medium">ราคา</th>
+              <th className="px-5 py-3 text-center text-xs text-muted-foreground font-medium hidden md:table-cell">หมวด</th>
+              <th className="px-5 py-3 text-center text-xs text-muted-foreground font-medium hidden sm:table-cell">แท็ก</th>
+              <th className="px-5 py-3 text-center text-xs text-muted-foreground font-medium">จัดการ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {displayed.map((item, i) => (
+              <tr key={item.id} className={i % 2 === 0 ? "bg-card" : "bg-muted/10"}>
+                {editingId === item.id ? (
+                  <td colSpan={6} className="px-5 py-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      <div className="flex gap-1.5">
+                        <select value={editForm.emoji} onChange={(e) => setEditForm({ ...editForm, emoji: e.target.value })}
+                          className="bg-input-background border border-border rounded-lg px-1 text-sm w-12">
+                          {EMOJIS.map((e) => <option key={e} value={e}>{e}</option>)}
+                        </select>
+                        <input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                          className="flex-1 bg-input-background border border-border rounded-lg px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-primary" />
+                      </div>
+                      <input value={editForm.nameEn} onChange={(e) => setEditForm({ ...editForm, nameEn: e.target.value })}
+                        placeholder="English name" className="bg-input-background border border-border rounded-lg px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-primary" />
+                      <input type="number" value={editForm.price} onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
+                        className="bg-input-background border border-border rounded-lg px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-primary" />
+                      <select value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value as "bakery" | "beverage" })}
+                        className="bg-input-background border border-border rounded-lg px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-primary">
+                        <option value="bakery">เบเกอรี่</option>
+                        <option value="beverage">เครื่องดื่ม</option>
+                      </select>
+                      <select value={editForm.tag} onChange={(e) => setEditForm({ ...editForm, tag: e.target.value as FormState["tag"] })}
+                        className="bg-input-background border border-border rounded-lg px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-primary">
+                        <option value="">ไม่มีแท็ก</option>
+                        <option value="bestseller">Bestseller</option>
+                        <option value="new">New</option>
+                      </select>
+                      <div className="flex gap-2">
+                        <button onClick={() => saveEdit(item.id)} className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs hover:bg-primary/80">
+                          <Check size={12} /> บันทึก
+                        </button>
+                        <button onClick={() => setEditingId(null)} className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 border border-border rounded-lg text-xs text-muted-foreground hover:text-foreground">
+                          <X size={12} /> ยกเลิก
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                ) : (
+                  <>
+                    <td className="px-5 py-3">
+                      <span className="flex items-center gap-2 font-medium text-foreground">
+                        <span className="text-lg">{item.emoji}</span> {item.name}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-muted-foreground hidden sm:table-cell">{item.nameEn}</td>
+                    <td className="px-5 py-3 text-center font-medium text-foreground">฿{item.price}</td>
+                    <td className="px-5 py-3 text-center hidden md:table-cell">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${item.category === "bakery" ? "bg-amber-50 text-amber-700" : "bg-blue-50 text-blue-700"}`}>
+                        {item.category === "bakery" ? "เบเกอรี่" : "เครื่องดื่ม"}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3 text-center hidden sm:table-cell"><TagBadge tag={item.tag} /></td>
+                    <td className="px-5 py-3 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <button onClick={() => startEdit(item)} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"><Edit2 size={14} /></button>
+                        <button onClick={() => deleteItem(item.id)} className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 size={14} /></button>
+                      </div>
+                    </td>
+                  </>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Instagram Caption Generator ────────────────────────────
+
+export type ScheduledPost = {
+  id: number;
+  itemName: string;
+  itemEmoji: string;
+  caption: string;
+  scheduledAt: string;
+  imageUrl: string | null;
+  style: string;
+};
+
+type InstagramSectionProps = {
+  items: MenuItem[];
+  scheduled: ScheduledPost[];
+  setScheduled: React.Dispatch<React.SetStateAction<ScheduledPost[]>>;
+};
+
+function InstagramSection({ items, scheduled, setScheduled }: InstagramSectionProps) {
+  const [selectedId, setSelectedId] = useState<number>(items[0]?.id ?? 1);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [captions, setCaptions] = useState<string[]>([]);
+  const [generating, setGenerating] = useState(false);
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
+  const [postedIdx, setPostedIdx] = useState<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [scheduleIdx, setScheduleIdx] = useState<number | null>(null);
+  const [scheduleTime, setScheduleTime] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const selectedItem = items.find((i) => i.id === selectedId) ?? items[0];
+  const STYLES = ["แบบที่ 1 · Hype 🔥", "แบบที่ 2 · Morning vibe 🌿", "แบบที่ 3 · Brand story ❤️"];
+
+  const handleFile = (file: File) => {
+    if (!file.type.startsWith("image/")) return;
+    setImageFile(file);
+    setImageUrl(URL.createObjectURL(file));
+  };
+
+  const onDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFile(file);
+  }, []);
+
+  const generate = () => {
+    if (!selectedItem) return;
+    setGenerating(true);
+    setCaptions([]);
+    setPostedIdx(null);
+    setScheduleIdx(null);
+    setTimeout(() => {
+      setCaptions(CAPTION_TEMPLATES.map((fn) => fn(selectedItem.name, selectedItem.nameEn, selectedItem.price)));
+      setGenerating(false);
+    }, 1200);
+  };
+
+  const copy = (text: string, idx: number) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedIdx(idx);
+      setTimeout(() => setCopiedIdx(null), 2000);
+    });
+  };
+
+  const postNow = async (caption: string, idx: number) => {
+    // Try Web Share API (works on mobile to share directly to IG app)
+    if (navigator.share) {
+      try {
+        const data: ShareData = { text: caption };
+        if (imageFile && navigator.canShare?.({ files: [imageFile] })) {
+          data.files = [imageFile];
+        }
+        await navigator.share(data);
+        setPostedIdx(idx);
+        setTimeout(() => setPostedIdx(null), 3000);
+        return;
+      } catch {
+        // user cancelled — fall through to manual flow
+      }
+    }
+    // Desktop fallback: copy caption + open Instagram
+    await navigator.clipboard.writeText(caption);
+    window.open("https://www.instagram.com/", "_blank");
+    setPostedIdx(idx);
+    setTimeout(() => setPostedIdx(null), 4000);
+  };
+
+  const schedulePost = (caption: string, idx: number) => {
+    if (!scheduleTime || !selectedItem) return;
+    const post: ScheduledPost = {
+      id: Date.now(),
+      itemName: selectedItem.name,
+      itemEmoji: selectedItem.emoji,
+      caption,
+      scheduledAt: scheduleTime,
+      imageUrl,
+      style: STYLES[idx],
+    };
+    setScheduled((prev) => [...prev, post].sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt)));
+    setScheduleIdx(null);
+    setScheduleTime("");
+  };
+
+  const formatScheduled = (iso: string) =>
+    new Date(iso).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" });
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-500 via-pink-500 to-orange-400 flex items-center justify-center">
+          <Instagram size={16} className="text-white" />
+        </div>
+        <div>
+          <h2 className="text-foreground" style={{ fontFamily: "var(--font-heading)" }}>สร้าง Caption สำหรับ Instagram</h2>
+          <p className="text-xs text-muted-foreground">เลือกเมนู อัปโหลดรูป สร้าง caption แล้วโพสหรือนัดเวลาได้เลย</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+        {/* Left */}
+        <div className="flex flex-col gap-4">
+          {/* Item selector */}
+          <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
+            <label className="text-sm font-medium text-foreground mb-3 block">เลือกเมนูที่ต้องการโพส</label>
+            <div className="relative">
+              <select
+                value={selectedId}
+                onChange={(e) => { setSelectedId(Number(e.target.value)); setCaptions([]); setPostedIdx(null); }}
+                className="w-full bg-input-background border border-border rounded-xl px-4 py-2.5 text-sm appearance-none outline-none focus:ring-1 focus:ring-primary pr-10"
+              >
+                <optgroup label="🥐 เบเกอรี่">
+                  {items.filter((i) => i.category === "bakery").map((item) => (
+                    <option key={item.id} value={item.id}>{item.emoji} {item.name} — ฿{item.price}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="☕ เครื่องดื่ม">
+                  {items.filter((i) => i.category === "beverage").map((item) => (
+                    <option key={item.id} value={item.id}>{item.emoji} {item.name} — ฿{item.price}</option>
+                  ))}
+                </optgroup>
+              </select>
+              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            </div>
+            {selectedItem && (
+              <div className="mt-3 flex items-center gap-3 p-3 bg-muted/30 rounded-xl">
+                <span className="text-3xl">{selectedItem.emoji}</span>
+                <div>
+                  <p className="text-sm font-medium text-foreground">{selectedItem.name}</p>
+                  <p className="text-xs text-muted-foreground">{selectedItem.nameEn} · ฿{selectedItem.price}</p>
+                </div>
+                {selectedItem.tag && <TagBadge tag={selectedItem.tag} />}
+              </div>
+            )}
+          </div>
+
+          {/* Image upload */}
+          <div className="bg-card rounded-2xl border border-border p-5 shadow-sm">
+            <label className="text-sm font-medium text-foreground mb-3 block">อัปโหลดรูปสินค้า (ไม่บังคับ)</label>
+            <div
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={onDrop}
+              onClick={() => fileRef.current?.click()}
+              className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-colors ${isDragging ? "border-primary bg-primary/10" : "border-border hover:border-primary/50 hover:bg-muted/30"}`}
+            >
+              {imageUrl ? (
+                <div className="relative">
+                  <img src={imageUrl} alt="preview" className="w-full max-h-52 object-cover rounded-lg" />
+                  <button onClick={(e) => { e.stopPropagation(); setImageUrl(null); setImageFile(null); }}
+                    className="absolute top-2 right-2 w-6 h-6 bg-black/50 rounded-full flex items-center justify-center text-white hover:bg-black/70">
+                    <X size={12} />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                  <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center"><ImagePlus size={20} /></div>
+                  <p className="text-sm">วางรูปที่นี่ หรือคลิกเพื่อเลือก</p>
+                  <p className="text-xs">PNG, JPG, WEBP</p>
+                </div>
+              )}
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+          </div>
+
+          {/* Generate button */}
+          <button onClick={generate} disabled={generating || !selectedItem}
+            className="flex items-center justify-center gap-2 w-full py-3 rounded-2xl text-sm font-medium transition-all bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 text-white hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm">
+            {generating
+              ? <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />กำลังสร้าง caption...</>
+              : <><Sparkles size={16} />สร้าง Caption ด้วย AI ✨</>}
+          </button>
+        </div>
+
+        {/* Right: captions */}
+        <div className="flex flex-col gap-3">
+          {captions.length === 0 && !generating && (
+            <div className="flex-1 flex flex-col items-center justify-center text-center py-16 bg-card rounded-2xl border border-border border-dashed">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-100 to-pink-100 flex items-center justify-center mb-3">
+                <Instagram size={24} className="text-pink-500" />
+              </div>
+              <p className="text-sm font-medium text-foreground">ยังไม่มี caption</p>
+              <p className="text-xs text-muted-foreground mt-1">เลือกเมนูและกดปุ่มสร้าง caption</p>
+            </div>
+          )}
+
+          {generating && (
+            <div className="flex flex-col gap-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="bg-card rounded-2xl border border-border p-4 animate-pulse">
+                  <div className="h-3 bg-muted rounded w-24 mb-3" />
+                  <div className="space-y-2">
+                    <div className="h-2.5 bg-muted rounded w-full" />
+                    <div className="h-2.5 bg-muted rounded w-4/5" />
+                    <div className="h-2.5 bg-muted rounded w-3/5" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {captions.map((caption, idx) => (
+            <div key={idx} className="bg-card rounded-2xl border border-border p-4 shadow-sm">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{STYLES[idx]}</span>
+                <button onClick={() => copy(caption, idx)}
+                  className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg transition-colors ${copiedIdx === idx ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground hover:text-foreground"}`}>
+                  {copiedIdx === idx ? <><CheckCheck size={12} /> Copied!</> : <><Copy size={12} /> Copy</>}
+                </button>
+              </div>
+
+              {/* Caption text */}
+              <p className="text-sm text-foreground whitespace-pre-line leading-relaxed mb-4">{caption}</p>
+
+              {/* Action buttons */}
+              <div className="flex gap-2 flex-wrap">
+                {/* Post Now */}
+                <button
+                  onClick={() => postNow(caption, idx)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-medium transition-all ${
+                    postedIdx === idx
+                      ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                      : "bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 text-white hover:opacity-90"
+                  }`}
+                >
+                  {postedIdx === idx
+                    ? <><CheckCircle2 size={13} /> โพสแล้ว! Caption คัดลอกแล้ว</>
+                    : <><Send size={13} /> โพสเลย</>}
+                </button>
+
+                {/* Schedule */}
+                <button
+                  onClick={() => setScheduleIdx(scheduleIdx === idx ? null : idx)}
+                  className={`flex items-center gap-1.5 py-2 px-3 rounded-xl text-xs font-medium border transition-colors ${
+                    scheduleIdx === idx
+                      ? "bg-primary/20 border-primary text-primary-foreground"
+                      : "border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+                  }`}
+                >
+                  <Calendar size={13} /> นัดโพส
+                </button>
+              </div>
+
+              {/* Schedule picker */}
+              {scheduleIdx === idx && (
+                <div className="mt-3 flex gap-2 items-center flex-wrap border-t border-border pt-3">
+                  <input
+                    type="datetime-local"
+                    value={scheduleTime}
+                    min={new Date().toISOString().slice(0, 16)}
+                    onChange={(e) => setScheduleTime(e.target.value)}
+                    className="flex-1 bg-input-background border border-border rounded-xl px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <button
+                    onClick={() => schedulePost(caption, idx)}
+                    disabled={!scheduleTime}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-xl text-xs font-medium hover:bg-primary/80 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Check size={12} /> บันทึก
+                  </button>
+                  <button onClick={() => setScheduleIdx(null)} className="p-1.5 rounded-xl text-muted-foreground hover:text-foreground">
+                    <X size={13} />
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Scheduled confirmation banner */}
+      {scheduled.length > 0 && (
+        <div className="mt-6 flex items-center gap-3 p-4 bg-primary/10 border border-primary/30 rounded-2xl">
+          <Calendar size={16} className="text-primary shrink-0" />
+          <p className="text-sm text-foreground">
+            นัดโพสไว้แล้ว <strong>{scheduled.length} โพส</strong> — ดูและจัดการได้ที่เมนู{" "}
+            <span className="text-primary font-medium">Instagram</span> ในแถบซ้าย
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── main export ────────────────────────────────────────────
+
+type AdminMenuProps = {
+  scheduled: ScheduledPost[];
+  setScheduled: React.Dispatch<React.SetStateAction<ScheduledPost[]>>;
+};
+
+export function AdminMenu({ scheduled, setScheduled }: AdminMenuProps) {
+  const [items, setItems] = useState<MenuItem[]>(INITIAL_MENU);
+  const [activeTab, setActiveTab] = useState<"menu" | "instagram">("menu");
+
+  return (
+    <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="mb-6">
+        <h1 className="text-foreground" style={{ fontFamily: "var(--font-heading)" }}>จัดการเมนู</h1>
+        <p className="text-muted-foreground text-sm mt-1">เพิ่ม แก้ไข หรือลบเมนู และสร้าง caption สำหรับ Instagram</p>
+      </div>
+
+      <div className="flex gap-1 bg-muted/50 p-1 rounded-xl mb-6 w-fit">
+        <button onClick={() => setActiveTab("menu")}
+          className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === "menu" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+          🥐 รายการเมนู
+        </button>
+        <button onClick={() => setActiveTab("instagram")}
+          className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${activeTab === "instagram" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+          <Instagram size={14} /> Instagram Caption
+        </button>
+      </div>
+
+      {activeTab === "menu" ? (
+        <MenuSection items={items} setItems={setItems} />
+      ) : (
+        <InstagramSection items={items} scheduled={scheduled} setScheduled={setScheduled} />
+      )}
+    </div>
+  );
+}
