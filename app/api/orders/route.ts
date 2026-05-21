@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { notifyNewOrder } from "@/lib/telegram/notify";
 
 interface CreateOrderInput {
   phone_number: string;
@@ -155,6 +156,21 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
+
+    notifyNewOrder({
+      orderNumber: order.order_number,
+      customerName: body.customer_name,
+      phoneNumber: body.phone_number,
+      deliveryType: body.delivery_type,
+      deliveryAddress: body.delivery_address || body.address,
+      deliveryFee,
+      totalPrice,
+      paymentMethod: body.payment_method,
+      notes: body.notes,
+      items: body.items,
+    }).catch((error) => {
+      console.error("Telegram new order notification error:", error);
+    });
 
     return NextResponse.json(
       {
