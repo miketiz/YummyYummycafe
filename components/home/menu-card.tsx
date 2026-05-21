@@ -12,6 +12,8 @@ type MenuCardProps = {
 };
 
 export function MenuCard({ item, index, onAddToCart }: MenuCardProps) {
+  const isLikelyAboveFold = index < 6;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 14 }}
@@ -26,6 +28,7 @@ export function MenuCard({ item, index, onAddToCart }: MenuCardProps) {
           alt={item.name}
           fill
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+          loading={isLikelyAboveFold ? "eager" : "lazy"}
           className="object-cover transition duration-700 group-hover:scale-105"
         />
         <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/55 to-transparent opacity-80" />

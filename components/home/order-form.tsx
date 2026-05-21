@@ -3,7 +3,8 @@
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 import { Loader2, ShoppingCart, Trash2, Plus, Minus, X, MapPin } from "lucide-react";
-import { bakery, beverages, type MenuItem as BaseMenuItem } from "./menu-data";
+import type { MenuItem as BaseMenuItem } from "./menu-data";
+import { useMenuItems } from "./use-menu-items";
 
 type MenuItem = BaseMenuItem & { emoji?: string };
 
@@ -30,6 +31,7 @@ export function OrderForm({ initialItems = [] }: OrderFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [step, setStep] = useState<"menu" | "details">("menu");
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const { bakery, beverages } = useMenuItems();
 
   const [formData, setFormData] = useState<OrderFormData>({
     phone_number: "",

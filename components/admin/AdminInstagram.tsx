@@ -76,7 +76,13 @@ export function AdminInstagram({ scheduled, onRemoveScheduled }: Props) {
     }
   };
 
-  useEffect(() => { fetchHistory(); }, []);
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void fetchHistory();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
+  }, []);
 
   const totalLikes = history.reduce((s, p) => s + p.likes, 0);
   const totalComments = history.reduce((s, p) => s + p.comments, 0);
@@ -126,7 +132,7 @@ export function AdminInstagram({ scheduled, onRemoveScheduled }: Props) {
               <Calendar size={22} className="text-muted-foreground" />
             </div>
             <p className="text-sm font-medium text-foreground">ยังไม่มีโพสที่นัดไว้</p>
-            <p className="text-xs text-muted-foreground mt-1">ไปที่ "จัดการเมนู → Instagram Caption" เพื่อนัดเวลาโพส</p>
+            <p className="text-xs text-muted-foreground mt-1">ไปที่ &quot;จัดการเมนู → Instagram Caption&quot; เพื่อนัดเวลาโพส</p>
           </div>
         ) : (
           <div className="flex flex-col gap-3">

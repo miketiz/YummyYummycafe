@@ -53,10 +53,13 @@ CREATE TABLE IF NOT EXISTS menu_items (
   category VARCHAR(50), -- bakery, beverage
   emoji VARCHAR(10),
   tag VARCHAR(50), -- bestseller, new
+  image_url TEXT,
   in_stock BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+ALTER TABLE menu_items ADD COLUMN IF NOT EXISTS image_url TEXT;
 
 -- 5. Payments table
 CREATE TABLE IF NOT EXISTS payments (
@@ -82,6 +85,7 @@ CREATE INDEX IF NOT EXISTS idx_payments_order_id ON payments(order_id);
 ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE menu_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 
 -- Dev-friendly policies so the app can create and read orders when
@@ -114,6 +118,14 @@ CREATE POLICY dev_allow_all_order_items
 DROP POLICY IF EXISTS dev_allow_all_payments ON payments;
 CREATE POLICY dev_allow_all_payments
   ON payments
+  FOR ALL
+  TO public
+  USING (true)
+  WITH CHECK (true);
+
+DROP POLICY IF EXISTS dev_allow_all_menu_items ON menu_items;
+CREATE POLICY dev_allow_all_menu_items
+  ON menu_items
   FOR ALL
   TO public
   USING (true)

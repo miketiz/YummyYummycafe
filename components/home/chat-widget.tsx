@@ -63,9 +63,10 @@ function createMessageId(prefix: "u" | "a") {
 interface ChatWidgetProps {
   /** Height (px) of the cart box when visible. Pass 0 when cart is hidden. */
   cartOffset?: number;
+  onOpenChat?: () => void;
 }
 
-export function ChatWidget({ cartOffset = 0 }: ChatWidgetProps) {
+export function ChatWidget({ cartOffset = 0, onOpenChat }: ChatWidgetProps) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -285,7 +286,15 @@ export function ChatWidget({ cartOffset = 0 }: ChatWidgetProps) {
       )}
 
       <button
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={() => {
+          setOpen((prev) => {
+            const nextOpen = !prev;
+            if (nextOpen) {
+              onOpenChat?.();
+            }
+            return nextOpen;
+          });
+        }}
         style={{ bottom: btnBottom }}
         className="fixed right-4 sm:right-6 z-50 w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 grid place-content-center transition-[bottom] duration-300"
         aria-label="toggle chat"

@@ -67,6 +67,54 @@ If model API keys are missing, the endpoint still works with a local fallback an
 
 `RAG_CONFIDENCE_THRESHOLD` is used as a guardrail. If retrieved confidence is lower than this threshold, the API will refuse to answer outside shop knowledge and return a guarded response.
 
+### Telegram daily sales report
+
+The app includes a Vercel Cron endpoint at `GET /api/cron/daily-sales-report`. It sends the previous Bangkok calendar day's sales report to Telegram every day at 07:00 Asia/Bangkok (`0 0 * * *` UTC in `vercel.json`).
+
+Set these environment variables in Vercel:
+
+```bash
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+TELEGRAM_CHAT_ID=your_telegram_chat_id
+CRON_SECRET=random_secret_at_least_16_chars
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+```
+
+`BOT_TOKEN` and `CHAT_ID` are also supported as fallback names.
+
+### Telegram back-office webhook
+
+Telegram messages sent to `POST /api/telegram/webhook` are handled as back-office commands. The website chat remains customer-facing through `/api/chat`; Telegram is restricted to admin chat ids and can answer operational questions such as daily sales, pending orders, recent orders, and best-selling menu items.
+
+Set these environment variables:
+
+```bash
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+TELEGRAM_WEBHOOK_SECRET=random_secret_at_least_16_chars
+TELEGRAM_CHAT_ID=your_admin_telegram_chat_id
+TELEGRAM_ADMIN_CHAT_IDS=optional_extra_admin_chat_ids_comma_separated
+```
+
+Register the webhook after deployment:
+
+```bash
+curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
+  -d "url=https://your-production-domain/api/telegram/webhook" \
+  -d "secret_token=$TELEGRAM_WEBHOOK_SECRET"
+```
+
+Supported admin prompts include:
+
+```text
+สรุปยอดวันนี้
+สรุปยอดเมื่อวาน
+สรุปยอด 7 วัน
+ออเดอร์ค้าง
+ออเดอร์ล่าสุด
+เมนูขายดีวันนี้
+```
+
 ### API request example
 
 ```bash

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable @typescript-eslint/no-require-imports */
 /*
 Simple Telegram bot scaffold supporting polling or webhook mode,
 and a daily 07:00 sales summary job. Requires these env vars:

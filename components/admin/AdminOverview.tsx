@@ -249,7 +249,11 @@ export function AdminOverview() {
   };
 
   useEffect(() => {
-    void fetchSummary();
+    const timer = window.setTimeout(() => {
+      void fetchSummary();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   if (loading) {

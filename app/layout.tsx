@@ -13,7 +13,7 @@ const headingFont = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "YummyYummy Cafe",
+  title: "YummyYummy Bakery",
   description: "Artisan bakery and cafe experience",
 };
 

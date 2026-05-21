@@ -5,6 +5,7 @@ import {
   ImagePlus, Camera, ChevronDown, Send, Calendar,
   CheckCircle2,
 } from "lucide-react";
+import { DEFAULT_MENU_ITEMS } from "@/lib/menu/catalog";
 
 export type MenuItem = {
   id: number;
@@ -14,9 +15,12 @@ export type MenuItem = {
   category: "bakery" | "beverage";
   tag?: "bestseller" | "new" | "";
   emoji: string;
+  image: string;
+  inStock: boolean;
 };
 
-const INITIAL_MENU: MenuItem[] = [
+const INITIAL_MENU: MenuItem[] = DEFAULT_MENU_ITEMS;
+const LEGACY_INITIAL_MENU: Array<Omit<MenuItem, "image" | "inStock">> = [
   { id: 1, name: "ครัวซองต์เนยแท้", nameEn: "Butter Croissant", price: 65, category: "bakery", tag: "bestseller", emoji: "🥐" },
   { id: 2, name: "ซินนามอน โรล", nameEn: "Cinnamon Roll", price: 85, category: "bakery", tag: "bestseller", emoji: "🌀" },
   { id: 3, name: "ฟรุ๊ต ทาร์ต", nameEn: "Fruit Tart", price: 95, category: "bakery", tag: "new", emoji: "🥧" },
@@ -33,6 +37,8 @@ const INITIAL_MENU: MenuItem[] = [
 ];
 
 const EMOJIS = ["🥐", "🌀", "🥧", "🍞", "🥮", "🫐", "🍫", "🫓", "🧁", "🫠", "☕", "🍵", "🍹", "🎂", "🍰", "🥞", "🧇", "🍩", "🍪", "🎉"];
+
+void LEGACY_INITIAL_MENU;
 
 const CAPTION_TEMPLATES = [
   (name: string, nameEn: string, price: number) =>
@@ -64,9 +70,20 @@ type FormState = {
   category: "bakery" | "beverage";
   tag: "" | "bestseller" | "new";
   emoji: string;
+  imageUrl: string;
+  inStock: boolean;
 };
 
-const EMPTY_FORM: FormState = { name: "", nameEn: "", price: "", category: "bakery", tag: "", emoji: "🥐" };
+const EMPTY_FORM: FormState = {
+  name: "",
+  nameEn: "",
+  price: "",
+  category: "bakery",
+  tag: "",
+  emoji: "🥐",
+  imageUrl: "",
+  inStock: true,
+};
 
 // ── Menu Management section ────────────────────────────────
 
@@ -79,33 +96,80 @@ function MenuSection({ items, setItems }: { items: MenuItem[]; setItems: (items:
 
   const bakery = items.filter((i) => i.category === "bakery");
   const beverage = items.filter((i) => i.category === "beverage");
+  const available = items.filter((i) => i.inStock);
   const displayed = filterCat === "all" ? items : filterCat === "bakery" ? bakery : beverage;
 
-  const addItem = () => {
+  const addItem = async () => {
     if (!form.name || !form.price) return;
-    const newItem: MenuItem = {
-      id: Date.now(),
-      name: form.name,
-      nameEn: form.nameEn || form.name,
-      price: Number(form.price),
-      category: form.category,
-      tag: form.tag || undefined,
-      emoji: form.emoji,
-    };
-    setItems([...items, newItem]);
+    const response = await fetch("/api/menu-items", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: form.name,
+        nameEn: form.nameEn || form.name,
+        price: Number(form.price),
+        category: form.category,
+        tag: form.tag || undefined,
+        emoji: form.emoji,
+        imageUrl: form.imageUrl,
+        inStock: form.inStock,
+      }),
+    });
+    const data = (await response.json()) as { data?: MenuItem; error?: string };
+    if (!response.ok || !data.data) {
+      alert(data.error || "Cannot save menu item");
+      return;
+    }
+    setItems([...items, data.data].sort((a, b) => a.id - b.id));
     setForm(EMPTY_FORM);
     setShowAdd(false);
   };
 
-  const deleteItem = (id: number) => setItems(items.filter((i) => i.id !== id));
+  const deleteItem = async (id: number) => {
+    const response = await fetch(`/api/menu-items/${id}`, { method: "DELETE" });
+    if (!response.ok) {
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+      alert(data.error || "Cannot delete menu item");
+      return;
+    }
+    setItems(items.filter((i) => i.id !== id));
+  };
 
   const startEdit = (item: MenuItem) => {
     setEditingId(item.id);
-    setEditForm({ name: item.name, nameEn: item.nameEn, price: String(item.price), category: item.category, tag: item.tag || "", emoji: item.emoji });
+    setEditForm({
+      name: item.name,
+      nameEn: item.nameEn,
+      price: String(item.price),
+      category: item.category,
+      tag: item.tag || "",
+      emoji: item.emoji,
+      imageUrl: item.image,
+      inStock: item.inStock,
+    });
   };
 
-  const saveEdit = (id: number) => {
-    setItems(items.map((i) => i.id === id ? { ...i, ...editForm, price: Number(editForm.price), tag: editForm.tag || undefined } : i));
+  const saveEdit = async (id: number) => {
+    const response = await fetch(`/api/menu-items/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: editForm.name,
+        nameEn: editForm.nameEn,
+        price: Number(editForm.price),
+        category: editForm.category,
+        tag: editForm.tag || null,
+        emoji: editForm.emoji,
+        imageUrl: editForm.imageUrl,
+        inStock: editForm.inStock,
+      }),
+    });
+    const data = (await response.json()) as { data?: MenuItem; error?: string };
+    if (!response.ok || !data.data) {
+      alert(data.error || "Cannot update menu item");
+      return;
+    }
+    setItems(items.map((i) => i.id === id ? data.data! : i));
     setEditingId(null);
   };
 
@@ -173,6 +237,16 @@ function MenuSection({ items, setItems }: { items: MenuItem[]; setItems: (items:
                 <option value="new">🆕 New</option>
               </select>
             </div>
+            <div className="sm:col-span-2">
+              <label className="text-xs text-muted-foreground mb-1 block">Image URL</label>
+              <input value={form.imageUrl} onChange={(e) => setForm({ ...form, imageUrl: e.target.value })}
+                placeholder="https://images.unsplash.com/..." className="w-full bg-input-background border border-border rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-primary" />
+            </div>
+            <label className="sm:col-span-2 flex items-center gap-2 text-xs text-muted-foreground">
+              <input type="checkbox" checked={form.inStock} onChange={(e) => setForm({ ...form, inStock: e.target.checked })}
+                className="h-4 w-4 rounded border-border accent-primary" />
+              <span>พร้อมขายและแสดงบนหน้าร้าน</span>
+            </label>
           </div>
           <div className="flex gap-2 mt-4 justify-end">
             <button onClick={() => setShowAdd(false)} className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground border border-border rounded-xl">ยกเลิก</button>
@@ -184,6 +258,7 @@ function MenuSection({ items, setItems }: { items: MenuItem[]; setItems: (items:
       )}
 
       <div className="flex gap-4 mb-4">
+        <span className="text-xs text-muted-foreground">พร้อมขาย <strong className="text-foreground">{available.length}</strong></span>
         <span className="text-xs text-muted-foreground">ทั้งหมด <strong className="text-foreground">{items.length}</strong> เมนู</span>
         <span className="text-xs text-muted-foreground">เบเกอรี่ <strong className="text-foreground">{bakery.length}</strong></span>
         <span className="text-xs text-muted-foreground">เครื่องดื่ม <strong className="text-foreground">{beverage.length}</strong></span>
@@ -230,6 +305,13 @@ function MenuSection({ items, setItems }: { items: MenuItem[]; setItems: (items:
                         <option value="bestseller">Bestseller</option>
                         <option value="new">New</option>
                       </select>
+                      <input value={editForm.imageUrl} onChange={(e) => setEditForm({ ...editForm, imageUrl: e.target.value })}
+                        placeholder="Image URL" className="col-span-2 sm:col-span-3 bg-input-background border border-border rounded-lg px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-primary" />
+                      <label className="col-span-2 sm:col-span-3 flex items-center gap-2 text-xs text-muted-foreground">
+                        <input type="checkbox" checked={editForm.inStock} onChange={(e) => setEditForm({ ...editForm, inStock: e.target.checked })}
+                          className="h-4 w-4 rounded border-border accent-primary" />
+                        <span>พร้อมขายและแสดงบนหน้าร้าน</span>
+                      </label>
                       <div className="flex gap-2">
                         <button onClick={() => saveEdit(item.id)} className="flex-1 flex items-center justify-center gap-1 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs hover:bg-primary/80">
                           <Check size={12} /> บันทึก
@@ -246,6 +328,11 @@ function MenuSection({ items, setItems }: { items: MenuItem[]; setItems: (items:
                       <span className="flex items-center gap-2 font-medium text-foreground">
                         <span className="text-lg">{item.emoji}</span> {item.name}
                       </span>
+                      {!item.inStock && (
+                        <span className="mt-1 inline-flex text-[10px] font-semibold px-2 py-0.5 rounded-full border border-red-200 bg-red-50 text-red-600">
+                          หมดสต็อก / ซ่อนหน้าร้าน
+                        </span>
+                      )}
                     </td>
                     <td className="px-5 py-3 text-muted-foreground hidden sm:table-cell">{item.nameEn}</td>
                     <td className="px-5 py-3 text-center font-medium text-foreground">฿{item.price}</td>
@@ -406,8 +493,13 @@ function InstagramSection({ items, scheduled, setScheduled }: InstagramSectionPr
     setUnipostMessage("กรุณาอัปโหลดรูปสินค้าก่อนโพสไป Instagram ผ่าน UniPost");
   };
 
-  const schedulePost = (caption: string, idx: number) => {
+  const schedulePost = async (caption: string, idx: number) => {
     if (!scheduleTime || !selectedItem) return;
+    if (!imageFile) {
+      setUnipostMessage("กรุณาอัปโหลดรูปสินค้าเพื่อส่งนัดโพสต์ไป UniPost");
+      return;
+    }
+    await sendToUniPost(caption, idx, scheduleTime);
     const post: ScheduledPost = {
       id: nextScheduledId.current++,
       itemName: selectedItem.name,
@@ -649,7 +741,7 @@ function InstagramSection({ items, scheduled, setScheduled }: InstagramSectionPr
                 <input type="datetime-local" value={scheduleTime} min={new Date().toISOString().slice(0, 16)}
                   onChange={(e) => setScheduleTime(e.target.value)}
                   className="flex-1 bg-input-background border border-border rounded-xl px-3 py-1.5 text-xs outline-none focus:ring-1 focus:ring-primary" />
-                <button onClick={() => schedulePost(customCaption, CUSTOM_CAPTION_IDX)} disabled={!scheduleTime}
+                  <button onClick={() => schedulePost(customCaption, CUSTOM_CAPTION_IDX)} disabled={!scheduleTime}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-xl text-xs font-medium hover:bg-primary/80 disabled:opacity-50 disabled:cursor-not-allowed">
                   <Check size={12} /> บันทึก
                 </button>
@@ -735,6 +827,30 @@ type AdminMenuProps = {
 export function AdminMenu({ scheduled, setScheduled }: AdminMenuProps) {
   const [items, setItems] = useState<MenuItem[]>(INITIAL_MENU);
   const [activeTab, setActiveTab] = useState<"menu" | "instagram">("menu");
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMenu() {
+      try {
+        const response = await fetch("/api/menu-items", { cache: "no-store" });
+        const data = (await response.json()) as { data?: MenuItem[] };
+        if (!cancelled && response.ok && Array.isArray(data.data)) {
+          setItems(data.data);
+        }
+      } catch {
+        // Keep bundled defaults if the menu API is unavailable.
+      }
+    }
+
+    const timer = window.setTimeout(() => {
+      void loadMenu();
+    }, 0);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, []);
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">

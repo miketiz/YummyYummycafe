@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+    "dev": "node --max-old-space-size=12288 ./node_modules/next/dist/bin/next dev",
+    "build": "node --max-old-space-size=12288 ./node_modules/next/dist/bin/next build",
+    "start": "node --max-old-space-size=12288 ./node_modules/next/dist/bin/next start",
+    "lint": "eslint app components lib scripts next.config.ts postcss.config.mjs eslint.config.mjs"
   },
   "dependencies": {
     "@supabase/auth-helpers-nextjs": "^0.7.4",

@@ -1,74 +1,437 @@
 import { NextResponse } from "next/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
-const INTERNAL_API_URL = process.env.INTERNAL_API_URL || "http://localhost:3000/api/internal/ai/process";
-const INTERNAL_AI_TOKEN = process.env.INTERNAL_AI_TOKEN;
-const BOT_TOKEN = process.env.BOT_TOKEN;
 const TELEGRAM_WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
+const BANGKOK_OFFSET_MS = 7 * 60 * 60 * 1000;
+const BANGKOK_TIME_ZONE = "Asia/Bangkok";
 
-async function callInternalAI(question: string) {
-  try {
-    const res = await fetch(INTERNAL_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-internal-token": INTERNAL_AI_TOKEN || "",
-      },
-      body: JSON.stringify({ question, history: [] }),
-    });
-    if (!res.ok) {
-      const t = await res.text().catch(() => "");
-      console.error("internal ai call failed", res.status, t);
-      return null;
+type TelegramMessage = {
+  text?: string;
+  chat?: {
+    id?: number | string;
+  };
+};
+
+type TelegramUpdate = {
+  message?: TelegramMessage;
+  edited_message?: TelegramMessage;
+};
+
+type OrderItemRecord = {
+  menu_item_name?: string | null;
+  menu_item_emoji?: string | null;
+  quantity?: number | null;
+  unit_price?: number | null;
+  subtotal?: number | null;
+};
+
+type OrderRecord = {
+  id?: string;
+  order_number?: string | null;
+  status?: string | null;
+  total_price?: number | string | null;
+  payment_status?: string | null;
+  created_at?: string | null;
+  customers?:
+    | {
+        name?: string | null;
+        phone_number?: string | null;
+      }
+    | Array<{
+        name?: string | null;
+        phone_number?: string | null;
+      }>
+    | null;
+  order_items?: OrderItemRecord[] | null;
+};
+
+type ItemSummary = {
+  name: string;
+  emoji: string;
+  quantity: number;
+  revenue: number;
+};
+
+function getBotToken() {
+  return process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN;
+}
+
+function getAdminChatIds() {
+  return [
+    process.env.TELEGRAM_CHAT_ID,
+    process.env.CHAT_ID,
+    process.env.TELEGRAM_ADMIN_CHAT_IDS,
+  ]
+    .filter(Boolean)
+    .flatMap((value) => String(value).split(","))
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function isAdminChat(chatId: number | string) {
+  const allowedChatIds = getAdminChatIds();
+  return allowedChatIds.length > 0 && allowedChatIds.includes(String(chatId));
+}
+
+function toBangkokDate(date: Date) {
+  return new Date(date.getTime() + BANGKOK_OFFSET_MS);
+}
+
+function bangkokStartOfDay(date = new Date()) {
+  const shifted = toBangkokDate(date);
+  shifted.setUTCHours(0, 0, 0, 0);
+  return new Date(shifted.getTime() - BANGKOK_OFFSET_MS);
+}
+
+function formatBangkokDate(date: Date) {
+  return new Intl.DateTimeFormat("th-TH", {
+    dateStyle: "medium",
+    timeZone: BANGKOK_TIME_ZONE,
+  }).format(date);
+}
+
+function formatBangkokTime(date: Date) {
+  return new Intl.DateTimeFormat("th-TH", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: BANGKOK_TIME_ZONE,
+  }).format(date);
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("th-TH", {
+    style: "currency",
+    currency: "THB",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function safeNumber(value: unknown, fallback = 0) {
+  const next = Number(value);
+  return Number.isFinite(next) ? next : fallback;
+}
+
+function pickString(...values: unknown[]) {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
     }
-    const json = await res.json().catch(() => null);
-    return json?.answer || null;
-  } catch (err) {
-    console.error("callInternalAI error", err);
-    return null;
   }
+  return "";
+}
+
+function normalizeName(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[\s\-_/().,]+/g, "")
+    .trim();
+}
+
+function getCustomer(order: OrderRecord) {
+  return Array.isArray(order.customers) ? order.customers[0] : order.customers;
+}
+
+function getReportRange(text: string) {
+  const todayStart = bangkokStartOfDay();
+
+  if (/เมื่อวาน|yesterday/i.test(text)) {
+    const end = todayStart;
+    return {
+      label: "เมื่อวาน",
+      start: new Date(end.getTime() - 24 * 60 * 60 * 1000),
+      end,
+    };
+  }
+
+  if (/สัปดาห์|week|7\s*วัน/i.test(text)) {
+    return {
+      label: "7 วันที่ผ่านมา",
+      start: new Date(todayStart.getTime() - 6 * 24 * 60 * 60 * 1000),
+      end: new Date(todayStart.getTime() + 24 * 60 * 60 * 1000),
+    };
+  }
+
+  return {
+    label: "วันนี้",
+    start: todayStart,
+    end: new Date(todayStart.getTime() + 24 * 60 * 60 * 1000),
+  };
+}
+
+function buildHelpMessage() {
+  return [
+    "คำสั่งหลังบ้านที่ใช้ได้:",
+    "- สรุปยอดวันนี้",
+    "- สรุปยอดเมื่อวาน",
+    "- สรุปยอด 7 วัน",
+    "- ออเดอร์ค้าง",
+    "- ออเดอร์ล่าสุด",
+    "- เมนูขายดีวันนี้",
+    "",
+    "บอท Telegram นี้สงวนไว้สำหรับหลังบ้านเท่านั้น ส่วนแชทหน้าเว็บยังเป็นโหมดลูกค้าเหมือนเดิม",
+  ].join("\n");
+}
+
+function buildSalesSummary(orders: OrderRecord[], label: string, start: Date, end: Date) {
+  const itemMap = new Map<string, ItemSummary>();
+  const statusCounts = new Map<string, number>();
+  let revenue = 0;
+  let paidRevenue = 0;
+  let itemsSold = 0;
+
+  for (const order of orders) {
+    const totalPrice = safeNumber(order.total_price);
+    revenue += totalPrice;
+
+    const status = pickString(order.status, "unknown").toLowerCase();
+    statusCounts.set(status, (statusCounts.get(status) ?? 0) + 1);
+
+    const paymentStatus = pickString(order.payment_status).toLowerCase();
+    if (paymentStatus === "paid" || paymentStatus === "completed") {
+      paidRevenue += totalPrice;
+    }
+
+    const items = Array.isArray(order.order_items) ? order.order_items : [];
+    for (const item of items) {
+      const name = pickString(item.menu_item_name, "ไม่ระบุเมนู");
+      const quantity = Math.max(1, Math.round(safeNumber(item.quantity, 1)));
+      const subtotal = safeNumber(item.subtotal, quantity * safeNumber(item.unit_price));
+      const key = normalizeName(name);
+      const current = itemMap.get(key) ?? {
+        name,
+        emoji: pickString(item.menu_item_emoji),
+        quantity: 0,
+        revenue: 0,
+      };
+
+      current.quantity += quantity;
+      current.revenue += subtotal;
+      current.emoji = current.emoji || pickString(item.menu_item_emoji);
+      itemMap.set(key, current);
+      itemsSold += quantity;
+    }
+  }
+
+  const topItems = Array.from(itemMap.values())
+    .sort((left, right) => right.quantity - left.quantity || right.revenue - left.revenue)
+    .slice(0, 5);
+
+  const statusLine = Array.from(statusCounts.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([status, count]) => `${status}: ${count}`)
+    .join(", ");
+
+  const endDisplay = new Date(end.getTime() - 60 * 1000);
+  const topItemLines = topItems.length
+    ? topItems.map((item, index) => {
+        const emoji = item.emoji ? `${item.emoji} ` : "";
+        return `${index + 1}. ${emoji}${item.name} x${item.quantity} (${formatCurrency(item.revenue)})`;
+      })
+    : ["ยังไม่มีรายการขายในช่วงนี้"];
+
+  return [
+    `สรุปยอดขาย${label}`,
+    `${formatBangkokDate(start)} ${formatBangkokTime(start)}-${formatBangkokTime(endDisplay)}`,
+    "",
+    `ยอดขายรวม: ${formatCurrency(revenue)}`,
+    `ยอดชำระแล้ว: ${formatCurrency(paidRevenue)}`,
+    `จำนวนออเดอร์: ${orders.length}`,
+    `จำนวนสินค้าที่ขาย: ${itemsSold}`,
+    `ค่าเฉลี่ยต่อออเดอร์: ${formatCurrency(orders.length > 0 ? revenue / orders.length : 0)}`,
+    "",
+    "เมนูขายดี:",
+    ...topItemLines,
+    "",
+    `สถานะออเดอร์: ${statusLine || "ไม่มีข้อมูล"}`,
+  ].join("\n");
+}
+
+function buildOrderList(title: string, orders: OrderRecord[]) {
+  if (orders.length === 0) {
+    return `${title}\nไม่มีรายการ`;
+  }
+
+  return [
+    title,
+    ...orders.slice(0, 10).map((order, index) => {
+      const customer = getCustomer(order);
+      const createdAt = order.created_at ? new Date(order.created_at) : null;
+      const time = createdAt ? formatBangkokTime(createdAt) : "-";
+      const name = pickString(customer?.name, "ไม่ระบุชื่อ");
+      const phone = pickString(customer?.phone_number);
+      const contact = phone ? `${name} (${phone})` : name;
+
+      return [
+        `${index + 1}. #${pickString(order.order_number, order.id)}`,
+        `เวลา: ${time}`,
+        `ลูกค้า: ${contact}`,
+        `ยอด: ${formatCurrency(safeNumber(order.total_price))}`,
+        `สถานะ: ${pickString(order.status, "pending")}`,
+      ].join(" | ");
+    }),
+  ].join("\n");
+}
+
+async function fetchOrders(start: Date, end: Date) {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("orders")
+    .select(
+      `
+        id,
+        order_number,
+        status,
+        total_price,
+        payment_status,
+        created_at,
+        customers(name, phone_number),
+        order_items(menu_item_name, menu_item_emoji, quantity, unit_price, subtotal)
+      `,
+    )
+    .gte("created_at", start.toISOString())
+    .lt("created_at", end.toISOString())
+    .order("created_at", { ascending: false })
+    .limit(250);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as OrderRecord[];
+}
+
+async function fetchPendingOrders() {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("orders")
+    .select(
+      `
+        id,
+        order_number,
+        status,
+        total_price,
+        payment_status,
+        created_at,
+        customers(name, phone_number)
+      `,
+    )
+    .in("status", ["pending", "confirmed", "preparing", "ready"])
+    .order("created_at", { ascending: true })
+    .limit(10);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as OrderRecord[];
+}
+
+async function fetchRecentOrders() {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("orders")
+    .select(
+      `
+        id,
+        order_number,
+        status,
+        total_price,
+        payment_status,
+        created_at,
+        customers(name, phone_number)
+      `,
+    )
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as OrderRecord[];
+}
+
+async function buildAdminAnswer(text: string) {
+  if (/^\/?(start|help|commands)|ช่วย|คำสั่ง/i.test(text)) {
+    return buildHelpMessage();
+  }
+
+  if (/ค้าง|รอดำเนินการ|pending|confirmed|preparing|ready/i.test(text)) {
+    const orders = await fetchPendingOrders();
+    return buildOrderList("ออเดอร์ค้าง/กำลังดำเนินการ", orders);
+  }
+
+  if (/ล่าสุด|recent|last/i.test(text)) {
+    const orders = await fetchRecentOrders();
+    return buildOrderList("ออเดอร์ล่าสุด", orders);
+  }
+
+  const range = getReportRange(text);
+  const orders = await fetchOrders(range.start, range.end);
+  return buildSalesSummary(orders, range.label, range.start, range.end);
 }
 
 async function sendTelegramMessage(chatId: number | string, text: string) {
-  if (!BOT_TOKEN) {
-    console.error("BOT_TOKEN not configured");
-    return null;
+  const botToken = getBotToken();
+  if (!botToken) {
+    console.error("TELEGRAM_BOT_TOKEN or BOT_TOKEN not configured");
+    return false;
   }
 
   try {
-    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: "HTML" }),
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        disable_web_page_preview: true,
+      }),
     });
+
+    if (!res.ok) {
+      const details = await res.text().catch(() => "");
+      console.error("sendTelegramMessage failed", res.status, details);
+    }
+
     return res.ok;
   } catch (err) {
     console.error("sendTelegramMessage error", err);
-    return null;
+    return false;
   }
 }
 
 export async function POST(req: Request) {
-  const secretHeader = req.headers.get("x-telegram-bot-api-secret-token") || req.headers.get("x-telegram-secret");
+  const secretHeader =
+    req.headers.get("x-telegram-bot-api-secret-token") ||
+    req.headers.get("x-telegram-secret");
+
   if (!TELEGRAM_WEBHOOK_SECRET || secretHeader !== TELEGRAM_WEBHOOK_SECRET) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let update: any;
+  let update: TelegramUpdate;
   try {
-    update = await req.json();
-  } catch (err) {
+    update = (await req.json()) as TelegramUpdate;
+  } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
   try {
     const message = update.message || update.edited_message;
-    const text = message?.text;
+    const text = message?.text?.trim();
     const chatId = message?.chat?.id;
 
     if (text && chatId) {
-      const answer = (await callInternalAI(text)) || "ขอโทษครับ เกิดข้อผิดพลาดในการประมวลผล";
+      if (!isAdminChat(chatId)) {
+        await sendTelegramMessage(chatId, "บัญชีนี้ไม่มีสิทธิ์เข้าถึงข้อมูลหลังบ้าน");
+        return NextResponse.json({ ok: true, skipped: "non-admin-chat" });
+      }
+
+      const answer = await buildAdminAnswer(text);
       await sendTelegramMessage(chatId, answer);
     }
 

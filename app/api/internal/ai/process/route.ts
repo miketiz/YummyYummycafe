@@ -8,6 +8,10 @@ export const runtime = "nodejs";
 let chunkCachePromise: Promise<Awaited<ReturnType<typeof loadKnowledgeChunks>>> | null = null;
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
+type InternalAiRequest = {
+  question?: unknown;
+  history?: unknown;
+};
 
 export async function POST(request: Request) {
   const headerToken = request.headers.get("x-internal-token") ||
@@ -18,10 +22,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: any;
+  let body: InternalAiRequest;
   try {
     body = await request.json();
-  } catch (err) {
+  } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 

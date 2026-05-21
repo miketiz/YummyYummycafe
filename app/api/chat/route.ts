@@ -3,6 +3,7 @@ import { generateRagAnswer } from "@/lib/rag/generator";
 import { loadKnowledgeChunks } from "@/lib/rag/knowledge";
 import { retrieveRelevantChunks } from "@/lib/rag/retriever";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { groupMenuItems, normalizeMenuRecord, type MenuItem } from "@/lib/menu/catalog";
 import type { ChatRequestBody } from "@/lib/rag/types";
 
 export const runtime = "nodejs";
@@ -359,6 +360,39 @@ function buildMenuOverviewAnswer(retrieved: Awaited<ReturnType<typeof loadKnowle
   ].join("\n\n");
 }
 
+async function buildLiveMenuOverviewAnswer() {
+  try {
+    const supabase = await createServerSupabaseClient();
+    const { data, error } = await supabase
+      .from("menu_items")
+      .select("id, name, name_en, price, category, emoji, tag, in_stock")
+      .eq("in_stock", true)
+      .order("id", { ascending: true });
+
+    if (error || !data || data.length === 0) {
+      return null;
+    }
+
+    const items = data
+      .map((record) => normalizeMenuRecord(record))
+      .filter((item): item is MenuItem => item !== null);
+    const { bakery, beverages } = groupMenuItems(items);
+    const formatItems = (values: typeof items) =>
+      values.map((item) => `${item.emoji} ${item.name} (${item.price} บาท)`).join(", ");
+
+    return [
+      "เมนูตอนนี้มี 2 หมวดหลักครับ",
+      bakery.length ? `เบเกอรี่: ${formatItems(bakery)}` : null,
+      beverages.length ? `เครื่องดื่ม: ${formatItems(beverages)}` : null,
+      "ถ้าต้องการ ผมช่วยแนะนำเมนูขายดีหรือจับคู่เครื่องดื่มให้ได้ครับ",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  } catch {
+    return null;
+  }
+}
+
 async function getKnowledgeChunks() {
   if (!chunkCachePromise) {
     chunkCachePromise = loadKnowledgeChunks();
@@ -391,7 +425,7 @@ export async function POST(req: Request) {
     const threshold = Number(process.env.RAG_CONFIDENCE_THRESHOLD ?? "0.18");
 
     if (isMenuOverviewQuestion(message)) {
-      const menuAnswer = buildMenuOverviewAnswer(knowledgeChunks);
+      const menuAnswer = await buildLiveMenuOverviewAnswer() ?? buildMenuOverviewAnswer(knowledgeChunks);
       if (menuAnswer) {
         return NextResponse.json({
           answer: menuAnswer,

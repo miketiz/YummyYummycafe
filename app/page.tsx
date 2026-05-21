@@ -3,20 +3,19 @@
 import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
-import { ChevronDown, Menu, ShoppingCart, Wheat } from "lucide-react";
+import { ChevronDown, Menu, ShoppingCart } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import { ChatWidget } from "@/components/home/chat-widget";
 import { MenuCard } from "@/components/home/menu-card";
 import { OrderStatusCheck } from "../components/home/order-status-check";
 import {
-  bakery,
-  beverages,
   features,
   type CartItem,
   type MenuItem,
 } from "@/components/home/menu-data";
 import { OrderForm } from "@/components/home/order-form";
 import { SectionHeader } from "@/components/home/section-header";
+import { useMenuItems } from "@/components/home/use-menu-items";
 
 export default function HomePage() {
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -24,6 +23,7 @@ export default function HomePage() {
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [cartHeight, setCartHeight] = useState(0);
+  const { bakery, beverages } = useMenuItems();
   const cartRef = useRef<HTMLElement>(null);
 
   const totalItems = useMemo(
@@ -217,19 +217,11 @@ export default function HomePage() {
       <section id="about" className="py-18 px-4 sm:px-6 lg:px-8">
         <div className="max-w-5xl mx-auto text-center">
           <p className="text-primary text-xs uppercase tracking-[0.25em] mb-2">Our Story</p>
-          <h2 className="font-heading text-[clamp(1.9rem,4vw,2.8rem)]">YummyYummy Cafe</h2>
+          <h2 className="font-heading text-[clamp(1.9rem,4vw,2.8rem)]">YummyYummy Bakery</h2>
           <p className="mt-4 text-muted-foreground leading-relaxed">
             เราเริ่มจากความรักในขนมปัง และอยากให้ทุกเช้าของคุณมีความสุขขึ้นอีกนิด
             ด้วยเบเกอรี่ที่อบใหม่ทุกวันและเครื่องดื่มที่จับคู่กันอย่างตั้งใจ
           </p>
-          <div className="mt-6">
-            <a
-              href="/admin"
-              className="inline-flex items-center px-5 py-2.5 rounded-full bg-primary text-primary-foreground hover:opacity-90"
-            >
-              ไปหน้า Admin
-            </a>
-          </div>
         </div>
       </section>
 
@@ -289,7 +281,13 @@ export default function HomePage() {
       )}
 
           {/* Pass cartHeight so ChatWidget can position itself above the cart box */}
-      <ChatWidget cartOffset={cartHeight} />
+      <ChatWidget
+        cartOffset={showCart ? cartHeight : 0}
+        onOpenChat={() => {
+          setShowCart(false);
+          setCartHeight(0);
+        }}
+      />
     </div>
   );
 }

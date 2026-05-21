@@ -38,23 +38,27 @@ export default function AdminPage() {
     setScheduled((prev) => prev.filter((p) => p.id !== id));
 
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(SCHEDULED_POSTS_STORAGE_KEY);
-      if (!raw) {
-        return;
-      }
+    const timer = window.setTimeout(() => {
+      try {
+        const raw = window.localStorage.getItem(SCHEDULED_POSTS_STORAGE_KEY);
+        if (!raw) {
+          return;
+        }
 
-      const parsed = JSON.parse(raw) as ScheduledPost[];
-      if (Array.isArray(parsed)) {
-        setScheduled(
-          parsed
-            .filter((post): post is ScheduledPost => Boolean(post && typeof post === "object"))
-            .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt)),
-        );
+        const parsed = JSON.parse(raw) as ScheduledPost[];
+        if (Array.isArray(parsed)) {
+          setScheduled(
+            parsed
+              .filter((post): post is ScheduledPost => Boolean(post && typeof post === "object"))
+              .sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt)),
+          );
+        }
+      } catch (error) {
+        console.error("Failed to load scheduled Instagram posts:", error);
       }
-    } catch (error) {
-      console.error("Failed to load scheduled Instagram posts:", error);
-    }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -220,7 +224,7 @@ export default function AdminPage() {
           </div>
         )}
 
-        {activeNav === "reports" && (
+        {activeNav === "reports" && false && (
           <div className="max-w-5xl mx-auto px-6 py-8">
             <div className="flex flex-col items-center justify-center py-24 text-center">
               <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center mb-4">
@@ -236,6 +240,8 @@ export default function AdminPage() {
             </div>
           </div>
         )}
+
+        {activeNav === "reports" && <AdminOverview />}
       </main>
     </div>
   );
