@@ -411,19 +411,37 @@ export function OrderManagementPanel() {
                 </span>
               </div>
 
-              {selectedOrder.payment_status !== "paid" && selectedOrder.status !== "cancelled" && (
-                <button
-                  onClick={() => updatePaymentStatus(selectedOrder.id, "paid")}
-                  disabled={updatingPaymentOrderId === selectedOrder.id}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {updatingPaymentOrderId === selectedOrder.id ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <CreditCard className="h-4 w-4" />
-                  )}
-                  ชำระเงินแล้ว
-                </button>
+              {selectedOrder.status !== "cancelled" && (
+                <div className="grid grid-cols-2 gap-2">
+                  {(["unpaid", "paid"] as const).map((paymentStatus) => {
+                    const isActive = selectedOrder.payment_status === paymentStatus;
+                    const isUpdating = updatingPaymentOrderId === selectedOrder.id;
+
+                    return (
+                      <button
+                        key={paymentStatus}
+                        onClick={() => updatePaymentStatus(selectedOrder.id, paymentStatus)}
+                        disabled={isUpdating || isActive}
+                        className={`flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-70 ${
+                          isActive
+                            ? paymentStatus === "paid"
+                              ? "bg-green-600 text-white"
+                              : "bg-yellow-500 text-white"
+                            : "bg-muted text-muted-foreground hover:bg-muted/80"
+                        }`}
+                      >
+                        {isUpdating && !isActive ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : paymentStatus === "paid" ? (
+                          <CreditCard className="h-4 w-4" />
+                        ) : (
+                          <Clock className="h-4 w-4" />
+                        )}
+                        {paymentStatus === "paid" ? "ชำระเงินแล้ว" : "รอชำระเงิน"}
+                      </button>
+                    );
+                  })}
+                </div>
               )}
             </div>
 
