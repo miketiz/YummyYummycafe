@@ -46,7 +46,12 @@ function doPost(e) {
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     const ordersSheet = getOrCreateSheet_(spreadsheet, CONFIG.ordersSheetName);
     setupOrdersSheet_(ordersSheet);
-    appendOrder_(ordersSheet, payload.order || {});
+
+    if (payload.action === "update_order_status") {
+      updateOrderStatus_(ordersSheet, payload.order || {});
+    } else {
+      appendOrder_(ordersSheet, payload.order || {});
+    }
 
     return json_({ ok: true }, 200);
   } catch (error) {
@@ -87,6 +92,50 @@ function appendOrder_(sheet, order) {
   const lastRow = sheet.getLastRow();
   sheet.getRange(lastRow, 9, 1, 3).setNumberFormat("#,##0.00");
   sheet.getRange(lastRow, 1, 1, ORDER_HEADERS.length).setBorder(false, false, true, false, false, false, "#e5e7eb", SpreadsheetApp.BorderStyle.SOLID);
+}
+
+function updateOrderStatus_(sheet, order) {
+  const orderNumber = String(order.order_number || "").trim();
+  if (!orderNumber) {
+    throw new Error("order_number is required");
+  }
+
+  const rowIndex = findOrderRow_(sheet, orderNumber);
+  if (!rowIndex) {
+    appendOrder_(sheet, order);
+    return;
+  }
+
+  if (order.payment_status) {
+    sheet.getRange(rowIndex, 13).setValue(order.payment_status);
+  }
+
+  if (order.order_status || order.status) {
+    sheet.getRange(rowIndex, 14).setValue(order.order_status || order.status);
+  }
+
+  if (order.admin_note !== undefined) {
+    sheet.getRange(rowIndex, 16).setValue(order.admin_note || "");
+  }
+
+  sheet.getRange(rowIndex, 17).setValue(order.updated_at || Utilities.formatDate(new Date(), "Asia/Bangkok", "yyyy-MM-dd HH:mm:ss"));
+  sheet.getRange(rowIndex, 1, 1, ORDER_HEADERS.length).setBorder(false, false, true, false, false, false, "#e5e7eb", SpreadsheetApp.BorderStyle.SOLID);
+}
+
+function findOrderRow_(sheet, orderNumber) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return null;
+
+  const values = sheet.getRange(2, 2, lastRow - 1, 1).getValues();
+  const target = String(orderNumber).trim().toUpperCase();
+  for (let index = 0; index < values.length; index += 1) {
+    const current = String(values[index][0] || "").trim().toUpperCase();
+    if (current === target) {
+      return index + 2;
+    }
+  }
+
+  return null;
 }
 
 function setupOrdersSheet_(sheet) {

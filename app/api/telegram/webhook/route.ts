@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { syncOrderStatusToGoogleSheet } from "@/lib/google-sheets/orders";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -52,6 +53,31 @@ type ItemSummary = {
   emoji: string;
   quantity: number;
   revenue: number;
+};
+
+type OrderStatus = "pending" | "confirmed" | "preparing" | "ready" | "delivered" | "cancelled";
+
+type OrderAction = {
+  orderNumber: string;
+  patch: {
+    status?: OrderStatus;
+    payment_status?: "unpaid" | "paid";
+  };
+  label: string;
+};
+
+const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+  pending: "รอยืนยัน",
+  confirmed: "ยืนยันแล้ว",
+  preparing: "กำลังเตรียม",
+  ready: "พร้อมส่ง",
+  delivered: "ส่งแล้ว",
+  cancelled: "ยกเลิก",
+};
+
+const PAYMENT_STATUS_LABELS: Record<"unpaid" | "paid", string> = {
+  unpaid: "รอชำระเงิน",
+  paid: "ชำระเงินแล้ว",
 };
 
 function getBotToken() {
@@ -172,6 +198,11 @@ function buildHelpMessage() {
     "- ออเดอร์ล่าสุด",
     "- เมนูขายดีวันนี้",
     "- วันนี้มีออเดอร์กี่รายการ",
+    "- ออเดอร์ที่ยังไม่ชำระ",
+    "- ชำระแล้ว ORD-20260524-001",
+    "- รอชำระ ORD-20260524-001",
+    "- ส่งแล้ว ORD-20260524-001",
+    "- ยกเลิก ORD-20260524-001",
     "",
     "พิมพ์เป็นภาษาธรรมชาติได้ เช่น “ช่วยบอกออเดอร์ที่ยังไม่จัดส่งที”",
     "บอท Telegram นี้สงวนไว้สำหรับหลังบ้านเท่านั้น ส่วนแชทหน้าเว็บยังเป็นโหมดลูกค้าเหมือนเดิม",
@@ -278,6 +309,46 @@ function buildOrderList(title: string, orders: OrderRecord[]) {
   ].join("\n");
 }
 
+function extractOrderNumber(text: string) {
+  const match = text.match(/#?(ORD-\d{6,8}-\d{1,5})/i);
+  return match?.[1]?.toUpperCase();
+}
+
+function parseOrderAction(text: string): OrderAction | null {
+  const orderNumber = extractOrderNumber(text);
+  if (!orderNumber) return null;
+
+  if (/ชำระแล้ว|จ่ายแล้ว|รับเงินแล้ว|paid|mark\s*paid/i.test(text)) {
+    return { orderNumber, patch: { payment_status: "paid" }, label: PAYMENT_STATUS_LABELS.paid };
+  }
+
+  if (/รอชำระ|ยังไม่ชำระ|ยังไม่จ่าย|unpaid|mark\s*unpaid/i.test(text)) {
+    return { orderNumber, patch: { payment_status: "unpaid" }, label: PAYMENT_STATUS_LABELS.unpaid };
+  }
+
+  if (/ยืนยัน|confirm/i.test(text)) {
+    return { orderNumber, patch: { status: "confirmed" }, label: ORDER_STATUS_LABELS.confirmed };
+  }
+
+  if (/กำลังเตรียม|กำลังทำ|prepar/i.test(text)) {
+    return { orderNumber, patch: { status: "preparing" }, label: ORDER_STATUS_LABELS.preparing };
+  }
+
+  if (/พร้อมส่ง|พร้อมรับ|ready/i.test(text)) {
+    return { orderNumber, patch: { status: "ready" }, label: ORDER_STATUS_LABELS.ready };
+  }
+
+  if (/ส่งแล้ว|จัดส่งแล้ว|delivered|done/i.test(text)) {
+    return { orderNumber, patch: { status: "delivered" }, label: ORDER_STATUS_LABELS.delivered };
+  }
+
+  if (/ยกเลิก|cancel/i.test(text)) {
+    return { orderNumber, patch: { status: "cancelled" }, label: ORDER_STATUS_LABELS.cancelled };
+  }
+
+  return null;
+}
+
 function isHelpIntent(text: string) {
   return /^\/?(start|help|commands)|ช่วย|คำสั่ง|ใช้ยังไง|ทำอะไรได้/i.test(text);
 }
@@ -288,6 +359,10 @@ function isPendingOrderIntent(text: string) {
 
 function isRecentOrderIntent(text: string) {
   return /ล่าสุด|ออเดอร์ใหม่|รายการใหม่|recent|last/i.test(text);
+}
+
+function isUnpaidOrderIntent(text: string) {
+  return /ยังไม่ชำระ|รอชำระ|ค้างชำระ|ยังไม่จ่าย|unpaid|pending\s*payment/i.test(text);
 }
 
 function isSalesIntent(text: string) {
@@ -373,7 +448,88 @@ async function fetchRecentOrders() {
   return (data ?? []) as OrderRecord[];
 }
 
+async function fetchUnpaidOrders() {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("orders")
+    .select(
+      `
+        id,
+        order_number,
+        status,
+        total_price,
+        payment_status,
+        created_at,
+        customers(name, phone_number)
+      `,
+    )
+    .eq("payment_status", "unpaid")
+    .neq("status", "cancelled")
+    .order("created_at", { ascending: true })
+    .limit(10);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as OrderRecord[];
+}
+
+async function applyOrderAction(action: OrderAction) {
+  const supabase = await createServerSupabaseClient();
+  const { data: order, error: fetchError } = await supabase
+    .from("orders")
+    .select("id, order_number, status, payment_status, total_price, customers(name, phone_number)")
+    .ilike("order_number", action.orderNumber)
+    .single();
+
+  if (fetchError || !order) {
+    return `ไม่พบออเดอร์ ${action.orderNumber}`;
+  }
+
+  const current = order as OrderRecord;
+  if (current.status === "cancelled") {
+    return `ออเดอร์ ${action.orderNumber} ถูกยกเลิกแล้ว จึงไม่สามารถอัปเดตได้`;
+  }
+
+  const { data: updatedOrder, error: updateError } = await supabase
+    .from("orders")
+    .update(action.patch)
+    .eq("id", current.id)
+    .select("id, order_number, status, payment_status, total_price, customers(name, phone_number)")
+    .single();
+
+  if (updateError || !updatedOrder) {
+    throw updateError || new Error("Failed to update order");
+  }
+
+  const updated = updatedOrder as OrderRecord;
+  syncOrderStatusToGoogleSheet({
+    orderNumber: pickString(updated.order_number, action.orderNumber),
+    orderStatus: pickString(updated.status),
+    paymentStatus: pickString(updated.payment_status) as "unpaid" | "paid",
+    adminNote: `Telegram: ${action.label}`,
+  }).catch((error) => {
+    console.error("Google Sheet Telegram status sync error:", error);
+  });
+
+  const customer = getCustomer(updated);
+  return [
+    `อัปเดต ${action.orderNumber} สำเร็จ`,
+    `คำสั่ง: ${action.label}`,
+    `ลูกค้า: ${pickString(customer?.name, "ไม่ระบุชื่อ")}`,
+    `ยอด: ${formatCurrency(safeNumber(updated.total_price))}`,
+    `สถานะออเดอร์: ${ORDER_STATUS_LABELS[pickString(updated.status, "pending") as OrderStatus] ?? pickString(updated.status, "pending")}`,
+    `สถานะชำระเงิน: ${PAYMENT_STATUS_LABELS[pickString(updated.payment_status, "unpaid") as "unpaid" | "paid"] ?? pickString(updated.payment_status, "unpaid")}`,
+  ].join("\n");
+}
+
 async function buildAdminAnswer(text: string) {
+  const orderAction = parseOrderAction(text);
+  if (orderAction) {
+    return applyOrderAction(orderAction);
+  }
+
   if (isHelpIntent(text)) {
     return buildHelpMessage();
   }
@@ -386,6 +542,11 @@ async function buildAdminAnswer(text: string) {
   if (isRecentOrderIntent(text)) {
     const orders = await fetchRecentOrders();
     return buildOrderList("ออเดอร์ล่าสุด", orders);
+  }
+
+  if (isUnpaidOrderIntent(text)) {
+    const orders = await fetchUnpaidOrders();
+    return buildOrderList("ออเดอร์ที่ยังไม่ชำระเงิน", orders);
   }
 
   if (!isSalesIntent(text)) {
