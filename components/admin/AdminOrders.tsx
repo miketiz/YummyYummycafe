@@ -65,6 +65,8 @@ function printOrderSlip(order: OrderData) {
   const subtotal = order.total_price - (order.delivery_fee || 0);
   const deliveryLabel = order.delivery_type === "delivery" ? "จัดส่ง" : "รับเอง";
   const paymentLabel = order.payment_status === "paid" ? "ชำระแล้ว" : "รอชำระเงิน";
+  const deliveryIcon = order.delivery_type === "delivery" ? "🛵" : "🛍️";
+  const paymentIcon = order.payment_status === "paid" ? "✅" : "⏳";
   const orderStatus = statusLabels[order.status] || order.status;
   const createdAt = new Date(order.created_at).toLocaleString("th-TH");
   const address = order.delivery_address || order.customers?.address || "-";
@@ -109,46 +111,88 @@ function printOrderSlip(order: OrderData) {
           }
           .slip {
             width: 100%;
-            border: 1px solid #d7e7dc;
-            border-radius: 12px;
+            border: 1px solid #c7dfcf;
+            border-radius: 18px;
             padding: 14px;
+            background:
+              radial-gradient(circle at top left, rgba(249, 199, 79, 0.16), transparent 34%),
+              linear-gradient(180deg, #ffffff 0%, #fbfffc 100%);
+            box-shadow: 0 10px 28px rgba(47, 111, 78, 0.10);
           }
           .brand {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-            padding-bottom: 10px;
+            gap: 9px;
+            padding: 8px 8px 12px;
             border-bottom: 2px solid #2f6f4e;
+            position: relative;
+          }
+          .logo {
+            width: 42px;
+            height: 42px;
+            border-radius: 14px;
+            object-fit: cover;
+            border: 1px solid #d9ecdf;
+            background: #f1f8f3;
+          }
+          .brand-copy { flex: 1; min-width: 0; }
+          .kicker {
+            color: #6b7f76;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0;
           }
           .brand h1 {
             margin: 0;
-            font-size: 18px;
+            font-size: 20px;
             letter-spacing: 0;
+            color: #1f4f36;
           }
           .brand p { margin: 2px 0 0; color: #5f746a; font-size: 11px; }
           .badge {
-            border: 1px solid #2f6f4e;
+            border: 1px solid #9fcfb0;
             border-radius: 999px;
-            padding: 4px 8px;
-            color: #2f6f4e;
+            padding: 5px 8px;
+            color: #1f4f36;
+            background: #effaf2;
             font-weight: 700;
             white-space: nowrap;
+            font-size: 11px;
           }
           .order-no {
             margin: 12px 0;
-            padding: 10px;
-            border-radius: 10px;
-            background: #f1f8f3;
+            padding: 12px 10px;
+            border-radius: 14px;
+            background: #2f6f4e;
+            color: white;
             text-align: center;
+            position: relative;
+            overflow: hidden;
+          }
+          .order-no::before,
+          .order-no::after {
+            content: "";
+            position: absolute;
+            top: 50%;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #ffffff;
+            transform: translateY(-50%);
+          }
+          .order-no::before { left: -9px; }
+          .order-no::after { right: -9px; }
+          .order-no .label {
+            color: rgba(255,255,255,0.76);
           }
           .order-no strong { display: block; font-size: 20px; }
           .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
           .box {
             border: 1px solid #e4efe8;
-            border-radius: 9px;
+            border-radius: 12px;
             padding: 8px;
             min-height: 54px;
+            background: rgba(255,255,255,0.84);
           }
           .label {
             display: block;
@@ -169,8 +213,9 @@ function printOrderSlip(order: OrderData) {
             color: #2f6f4e;
             text-transform: uppercase;
           }
+          .section-title::before { content: "✦ "; color: #f0a83a; }
           table { width: 100%; border-collapse: collapse; }
-          td { padding: 7px 0; border-bottom: 1px solid #edf4ef; vertical-align: top; }
+          td { padding: 8px 0; border-bottom: 1px solid #edf4ef; vertical-align: top; }
           .item-name { font-weight: 700; }
           .item-sub { color: #6b7f76; font-size: 11px; }
           .amount { text-align: right; font-weight: 700; white-space: nowrap; }
@@ -182,38 +227,52 @@ function printOrderSlip(order: OrderData) {
           }
           .grand {
             margin-top: 6px;
-            padding-top: 8px;
-            border-top: 2px solid #2f6f4e;
+            padding: 10px;
+            border-radius: 12px;
+            background: #1f4f36;
+            color: white;
             font-size: 16px;
             font-weight: 800;
           }
           .note {
             min-height: 42px;
             border: 1px dashed #b8cec0;
-            border-radius: 9px;
+            border-radius: 12px;
             padding: 8px;
+            background: rgba(255,255,255,0.72);
             white-space: pre-wrap;
+          }
+          .cute-row {
+            margin: 12px 0 4px;
+            text-align: center;
+            color: #2f6f4e;
+            font-weight: 700;
+            letter-spacing: 0;
           }
           .footer {
             margin-top: 14px;
             text-align: center;
             color: #6b7f76;
             font-size: 10px;
+            border-top: 1px dashed #b8cec0;
+            padding-top: 10px;
           }
           @media print {
             body { background: #ffffff; }
-            .slip { border: 0; border-radius: 0; padding: 0; }
+            .slip { border: 0; border-radius: 0; padding: 0; box-shadow: none; }
           }
         </style>
       </head>
       <body>
         <main class="slip">
           <header class="brand">
-            <div>
+            <img class="logo" src="/logo.png" alt="YummyYummy logo" />
+            <div class="brand-copy">
+              <div class="kicker">Fresh bakery cafe</div>
               <h1>YummyYummy</h1>
-              <p>Order sticker / kitchen slip</p>
+              <p>🥐 order sticker / kitchen slip</p>
             </div>
-            <div class="badge">${escapeHtml(deliveryLabel)}</div>
+            <div class="badge">${escapeHtml(deliveryIcon)} ${escapeHtml(deliveryLabel)}</div>
           </header>
 
           <section class="order-no">
@@ -237,9 +296,11 @@ function printOrderSlip(order: OrderData) {
             </div>
             <div class="box">
               <span class="label">ชำระเงิน</span>
-              <div class="value">${escapeHtml(paymentLabel)}</div>
+              <div class="value">${escapeHtml(paymentIcon)} ${escapeHtml(paymentLabel)}</div>
             </div>
           </section>
+
+          <div class="cute-row">🥐 ✦ 🍓 ✦ ☕</div>
 
           <section class="section">
             <p class="section-title">ที่อยู่ / จุดรับสินค้า</p>
@@ -265,6 +326,7 @@ function printOrderSlip(order: OrderData) {
           </section>
 
           <footer class="footer">
+            Made with care by YummyYummy<br />
             แปะใบนี้กับถุง/กล่องก่อนส่งมอบสินค้า
           </footer>
         </main>
