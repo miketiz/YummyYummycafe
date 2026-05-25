@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { syncOrderToGoogleSheet } from "@/lib/google-sheets/orders";
 import { notifyNewOrder } from "@/lib/telegram/notify";
 
 interface CreateOrderInput {
@@ -170,6 +171,25 @@ export async function POST(req: NextRequest) {
       items: body.items,
     }).catch((error) => {
       console.error("Telegram new order notification error:", error);
+    });
+
+    syncOrderToGoogleSheet({
+      orderNumber: order.order_number,
+      createdAt: order.created_at,
+      source: "website",
+      customerName: body.customer_name,
+      phoneNumber: body.phone_number,
+      deliveryType: body.delivery_type,
+      deliveryAddress: body.delivery_address || body.address,
+      deliveryFee,
+      totalPrice,
+      paymentMethod: body.payment_method,
+      paymentStatus: "unpaid",
+      orderStatus: order.status,
+      notes: body.notes,
+      items: body.items,
+    }).catch((error) => {
+      console.error("Google Sheet order sync error:", error);
     });
 
     return NextResponse.json(

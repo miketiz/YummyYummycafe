@@ -1,0 +1,2 @@
+created_at,order_number,source,customer_name,phone_number,items,delivery_type,delivery_address,subtotal,delivery_fee,total_price,payment_method,payment_status,order_status,notes,admin_note,updated_at
+2026-05-24 09:30,ORD-20260524-001,website,ตัวอย่างลูกค้า,0890000000,"ครัวซองต์เนย x2; ชาไทยเย็น x1",delivery,"ตัวอย่างที่อยู่จัดส่ง",210,25,235,promptpay,unpaid,pending,"ตัวอย่างแถวข้อมูล","",2026-05-24 09:30
