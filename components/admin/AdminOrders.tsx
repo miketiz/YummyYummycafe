@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, RefreshCw, CheckCircle, Clock, AlertCircle, CreditCard } from "lucide-react";
+import { Loader2, RefreshCw, CheckCircle, Clock, AlertCircle, CreditCard, Printer } from "lucide-react";
 
 type OrderData = {
   id: string;
@@ -11,7 +11,9 @@ type OrderData = {
   total_price: number;
   delivery_fee: number;
   delivery_type: string;
+  delivery_address?: string;
   payment_status: string;
+  notes?: string;
   created_at: string;
   updated_at: string;
   customers?: {
@@ -45,6 +47,238 @@ const statusLabels: Record<string, string> = {
   delivered: "✔️ ส่งแล้ว",
   cancelled: "❌ ยกเลิก",
 };
+
+function escapeHtml(value: unknown) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function formatBaht(value: number) {
+  return `฿${Number(value || 0).toFixed(0)}`;
+}
+
+function printOrderSlip(order: OrderData) {
+  const subtotal = order.total_price - (order.delivery_fee || 0);
+  const deliveryLabel = order.delivery_type === "delivery" ? "จัดส่ง" : "รับเอง";
+  const paymentLabel = order.payment_status === "paid" ? "ชำระแล้ว" : "รอชำระเงิน";
+  const orderStatus = statusLabels[order.status] || order.status;
+  const createdAt = new Date(order.created_at).toLocaleString("th-TH");
+  const address = order.delivery_address || order.customers?.address || "-";
+  const items = order.order_items ?? [];
+  const itemsHtml = items
+    .map((item) => {
+      const lineTotal = item.unit_price * item.quantity;
+      return `
+        <tr>
+          <td>
+            <div class="item-name">${escapeHtml(`${item.menu_item_emoji || ""} ${item.menu_item_name}`.trim())}</div>
+            <div class="item-sub">x${item.quantity} @ ${formatBaht(item.unit_price)}</div>
+          </td>
+          <td class="amount">${formatBaht(lineTotal)}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  const printWindow = window.open("", "_blank", "width=420,height=720");
+  if (!printWindow) {
+    toast.error("ไม่สามารถเปิดหน้าพิมพ์ได้ กรุณาอนุญาต popup");
+    return;
+  }
+
+  printWindow.document.write(`
+    <!doctype html>
+    <html lang="th">
+      <head>
+        <meta charset="utf-8" />
+        <title>${escapeHtml(order.order_number)}</title>
+        <style>
+          @page { size: 80mm auto; margin: 6mm; }
+          * { box-sizing: border-box; }
+          body {
+            margin: 0;
+            color: #17251f;
+            background: #ffffff;
+            font-family: "Tahoma", "Arial", sans-serif;
+            font-size: 12px;
+            line-height: 1.45;
+          }
+          .slip {
+            width: 100%;
+            border: 1px solid #d7e7dc;
+            border-radius: 12px;
+            padding: 14px;
+          }
+          .brand {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #2f6f4e;
+          }
+          .brand h1 {
+            margin: 0;
+            font-size: 18px;
+            letter-spacing: 0;
+          }
+          .brand p { margin: 2px 0 0; color: #5f746a; font-size: 11px; }
+          .badge {
+            border: 1px solid #2f6f4e;
+            border-radius: 999px;
+            padding: 4px 8px;
+            color: #2f6f4e;
+            font-weight: 700;
+            white-space: nowrap;
+          }
+          .order-no {
+            margin: 12px 0;
+            padding: 10px;
+            border-radius: 10px;
+            background: #f1f8f3;
+            text-align: center;
+          }
+          .order-no strong { display: block; font-size: 20px; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+          .box {
+            border: 1px solid #e4efe8;
+            border-radius: 9px;
+            padding: 8px;
+            min-height: 54px;
+          }
+          .label {
+            display: block;
+            color: #6b7f76;
+            font-size: 10px;
+            margin-bottom: 3px;
+          }
+          .value { font-weight: 700; word-break: break-word; }
+          .section {
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px dashed #b8cec0;
+          }
+          .section-title {
+            margin: 0 0 7px;
+            font-size: 12px;
+            font-weight: 700;
+            color: #2f6f4e;
+            text-transform: uppercase;
+          }
+          table { width: 100%; border-collapse: collapse; }
+          td { padding: 7px 0; border-bottom: 1px solid #edf4ef; vertical-align: top; }
+          .item-name { font-weight: 700; }
+          .item-sub { color: #6b7f76; font-size: 11px; }
+          .amount { text-align: right; font-weight: 700; white-space: nowrap; }
+          .totals { margin-top: 8px; }
+          .totals-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+          }
+          .grand {
+            margin-top: 6px;
+            padding-top: 8px;
+            border-top: 2px solid #2f6f4e;
+            font-size: 16px;
+            font-weight: 800;
+          }
+          .note {
+            min-height: 42px;
+            border: 1px dashed #b8cec0;
+            border-radius: 9px;
+            padding: 8px;
+            white-space: pre-wrap;
+          }
+          .footer {
+            margin-top: 14px;
+            text-align: center;
+            color: #6b7f76;
+            font-size: 10px;
+          }
+          @media print {
+            body { background: #ffffff; }
+            .slip { border: 0; border-radius: 0; padding: 0; }
+          }
+        </style>
+      </head>
+      <body>
+        <main class="slip">
+          <header class="brand">
+            <div>
+              <h1>YummyYummy</h1>
+              <p>Order sticker / kitchen slip</p>
+            </div>
+            <div class="badge">${escapeHtml(deliveryLabel)}</div>
+          </header>
+
+          <section class="order-no">
+            <span class="label">ORDER NO.</span>
+            <strong>${escapeHtml(order.order_number)}</strong>
+            <div>${escapeHtml(createdAt)}</div>
+          </section>
+
+          <section class="grid">
+            <div class="box">
+              <span class="label">ลูกค้า</span>
+              <div class="value">${escapeHtml(order.customers?.name || "-")}</div>
+            </div>
+            <div class="box">
+              <span class="label">โทร</span>
+              <div class="value">${escapeHtml(order.customers?.phone_number || "-")}</div>
+            </div>
+            <div class="box">
+              <span class="label">สถานะออเดอร์</span>
+              <div class="value">${escapeHtml(orderStatus)}</div>
+            </div>
+            <div class="box">
+              <span class="label">ชำระเงิน</span>
+              <div class="value">${escapeHtml(paymentLabel)}</div>
+            </div>
+          </section>
+
+          <section class="section">
+            <p class="section-title">ที่อยู่ / จุดรับสินค้า</p>
+            <div class="note">${escapeHtml(address)}</div>
+          </section>
+
+          <section class="section">
+            <p class="section-title">รายการสินค้า</p>
+            <table>
+              <tbody>${itemsHtml || "<tr><td>ไม่มีรายการสินค้า</td><td></td></tr>"}</tbody>
+            </table>
+          </section>
+
+          <section class="section totals">
+            <div class="totals-row"><span>ค่าสินค้า</span><strong>${formatBaht(subtotal)}</strong></div>
+            <div class="totals-row"><span>ค่าส่ง</span><strong>${formatBaht(order.delivery_fee || 0)}</strong></div>
+            <div class="totals-row grand"><span>รวมทั้งหมด</span><strong>${formatBaht(order.total_price)}</strong></div>
+          </section>
+
+          <section class="section">
+            <p class="section-title">หมายเหตุ</p>
+            <div class="note">${escapeHtml(order.notes || "-")}</div>
+          </section>
+
+          <footer class="footer">
+            แปะใบนี้กับถุง/กล่องก่อนส่งมอบสินค้า
+          </footer>
+        </main>
+        <script>
+          window.addEventListener("load", () => {
+            window.focus();
+            window.print();
+          });
+        </script>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+}
 
 export function OrderManagementPanel() {
   const [orders, setOrders] = useState<OrderData[]>([]);
@@ -349,6 +583,14 @@ export function OrderManagementPanel() {
                 {selectedOrder.customers?.name}
               </p>
             </div>
+
+            <button
+              onClick={() => printOrderSlip(selectedOrder)}
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90"
+            >
+              <Printer className="h-4 w-4" />
+              พิมพ์ใบออเดอร์
+            </button>
 
             {/* Customer Info */}
             <div className="space-y-2 pb-4 border-b border-border">

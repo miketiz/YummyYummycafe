@@ -530,6 +530,27 @@ async function buildAdminAnswer(text: string) {
     return applyOrderAction(orderAction);
   }
 
+  if (isPendingOrderIntent(text)) {
+    const orders = await fetchPendingOrders();
+    return buildOrderList("ออเดอร์ที่ยังไม่จัดส่ง/กำลังดำเนินการ", orders);
+  }
+
+  if (isUnpaidOrderIntent(text)) {
+    const orders = await fetchUnpaidOrders();
+    return buildOrderList("ออเดอร์ที่ยังไม่ชำระเงิน", orders);
+  }
+
+  if (isRecentOrderIntent(text)) {
+    const orders = await fetchRecentOrders();
+    return buildOrderList("ออเดอร์ล่าสุด", orders);
+  }
+
+  if (isSalesIntent(text)) {
+    const range = getReportRange(text);
+    const orders = await fetchOrders(range.start, range.end);
+    return buildSalesSummary(orders, range.label, range.start, range.end);
+  }
+
   if (isHelpIntent(text)) {
     return buildHelpMessage();
   }
