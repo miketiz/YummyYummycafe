@@ -70,8 +70,10 @@ export async function PATCH(
       );
     }
 
-    // Cannot update cancelled or delivered orders
-    if (order.status === "cancelled" || order.status === "delivered") {
+    const statusChanged = body.status !== undefined && body.status !== order.status;
+
+    // Cancelled orders are final. Delivered orders can still be marked paid.
+    if (order.status === "cancelled" || (order.status === "delivered" && statusChanged)) {
       return NextResponse.json(
         { error: `Cannot update a ${order.status} order` },
         { status: 400 }
