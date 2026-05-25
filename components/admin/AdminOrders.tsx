@@ -48,6 +48,12 @@ const statusLabels: Record<string, string> = {
   cancelled: "❌ ยกเลิก",
 };
 
+const paymentFilterLabels: Record<string, string> = {
+  all: "ชำระทั้งหมด",
+  unpaid: "รอชำระ",
+  paid: "ชำระแล้ว",
+};
+
 function escapeHtml(value: unknown) {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -347,6 +353,7 @@ export function OrderManagementPanel() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<OrderData | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterPaymentStatus, setFilterPaymentStatus] = useState<string>("all");
   const [phoneQuery, setPhoneQuery] = useState("");
   const [orderNumberQuery, setOrderNumberQuery] = useState("");
   const [updatingPaymentOrderId, setUpdatingPaymentOrderId] = useState<string | null>(null);
@@ -493,9 +500,13 @@ export function OrderManagementPanel() {
     }
   };
 
-  const filteredOrders = filterStatus === "all" 
-    ? orders 
-    : orders.filter(o => o.status === filterStatus);
+  const filteredOrders = orders.filter((order) => {
+    const matchesStatus = filterStatus === "all" || order.status === filterStatus;
+    const matchesPayment =
+      filterPaymentStatus === "all" || order.payment_status === filterPaymentStatus;
+
+    return matchesStatus && matchesPayment;
+  });
 
   return (
     <div className="w-full space-y-6">
@@ -550,6 +561,7 @@ export function OrderManagementPanel() {
               setPhoneQuery("");
               setOrderNumberQuery("");
               setFilterStatus("all");
+              setFilterPaymentStatus("all");
               setSelectedOrder(null);
               fetchOrders({ status: "all", phone: "", orderNumber: "" });
             }}
@@ -577,6 +589,27 @@ export function OrderManagementPanel() {
             </button>
           )
         )}
+      </div>
+
+      {/* Payment Filter */}
+      <div className="flex gap-2 flex-wrap border-t border-border pt-3">
+        {["all", "unpaid", "paid"].map((paymentStatus) => (
+          <button
+            key={paymentStatus}
+            onClick={() => setFilterPaymentStatus(paymentStatus)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              filterPaymentStatus === paymentStatus
+                ? paymentStatus === "paid"
+                  ? "bg-green-600 text-white"
+                  : paymentStatus === "unpaid"
+                    ? "bg-yellow-500 text-white"
+                    : "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
+            }`}
+          >
+            {paymentFilterLabels[paymentStatus]}
+          </button>
+        ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -611,8 +644,19 @@ export function OrderManagementPanel() {
                       {order.customers?.name} • {order.customers?.phone_number}
                     </p>
                   </div>
-                  <div className={`px-3 py-1 rounded-full border text-xs font-medium ${statusColors[order.status]}`}>
-                    {statusLabels[order.status] || order.status}
+                  <div className="flex flex-col items-end gap-1">
+                    <div className={`px-3 py-1 rounded-full border text-xs font-medium ${statusColors[order.status]}`}>
+                      {statusLabels[order.status] || order.status}
+                    </div>
+                    <div
+                      className={`px-3 py-1 rounded-full border text-xs font-medium ${
+                        order.payment_status === "paid"
+                          ? "bg-green-50 text-green-700 border-green-200"
+                          : "bg-yellow-50 text-yellow-700 border-yellow-200"
+                      }`}
+                    >
+                      {order.payment_status === "paid" ? "ชำระแล้ว" : "รอชำระ"}
+                    </div>
                   </div>
                 </div>
 
