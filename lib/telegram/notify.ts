@@ -101,7 +101,7 @@ export async function notifyNewOrder(order: NewOrderNotificationInput) {
   }
 
   const text = buildNewOrderMessage(order);
-  await Promise.allSettled(
+  const results = await Promise.allSettled(
     chatIds.map(async (chatId) => {
       const response = await fetch(`${TELEGRAM_API_BASE}/bot${botToken}/sendMessage`, {
         method: "POST",
@@ -119,4 +119,16 @@ export async function notifyNewOrder(order: NewOrderNotificationInput) {
       }
     }),
   );
+
+  const failedResults = results.filter(
+    (result): result is PromiseRejectedResult => result.status === "rejected",
+  );
+
+  if (failedResults.length > 0) {
+    throw new Error(
+      failedResults
+        .map((result) => (result.reason instanceof Error ? result.reason.message : String(result.reason)))
+        .join("; "),
+    );
+  }
 }
