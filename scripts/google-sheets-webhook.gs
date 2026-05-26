@@ -45,7 +45,7 @@ function doPost(e) {
 
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     const ordersSheet = getOrCreateSheet_(spreadsheet, CONFIG.ordersSheetName);
-    setupOrdersSheet_(ordersSheet);
+    ensureOrdersSheetReady_(ordersSheet);
 
     if (payload.action === "update_order_status") {
       updateOrderStatus_(ordersSheet, payload.order || {});
@@ -173,6 +173,25 @@ function setupOrdersSheet_(sheet) {
   sheet.getRange("Q2:Q1000").setNumberFormat("yyyy-mm-dd hh:mm");
 
   addConditionalFormatting_(sheet);
+}
+
+function ensureOrdersSheetReady_(sheet) {
+  const headerRange = sheet.getRange(1, 1, 1, ORDER_HEADERS.length);
+  const currentHeaders = headerRange.getValues()[0].map((value) => String(value || "").trim());
+  const hasExpectedHeaders = ORDER_HEADERS.every((header, index) => currentHeaders[index] === header);
+
+  if (hasExpectedHeaders) {
+    return;
+  }
+
+  headerRange.setValues([ORDER_HEADERS]);
+  headerRange
+    .setBackground("#2f6f4e")
+    .setFontColor("#ffffff")
+    .setFontWeight("bold")
+    .setHorizontalAlignment("center");
+
+  sheet.setFrozenRows(1);
 }
 
 function setupDashboardSheet_(dashboardSheet, ordersSheet) {
