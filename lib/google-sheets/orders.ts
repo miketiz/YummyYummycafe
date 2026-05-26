@@ -51,7 +51,7 @@ async function postGoogleSheetPayload(payload: Record<string, unknown>, errorPre
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 8000);
+  const timeoutId = setTimeout(() => controller.abort(), 20000);
 
   try {
     const response = await fetch(config.url, {
@@ -67,6 +67,16 @@ async function postGoogleSheetPayload(payload: Record<string, unknown>, errorPre
     if (!response.ok) {
       const details = await response.text().catch(() => "");
       throw new Error(`${errorPrefix}: ${response.status} ${details}`);
+    }
+
+    const result = (await response.json().catch(() => null)) as {
+      ok?: boolean;
+      error?: string;
+      statusCode?: number;
+    } | null;
+
+    if (result && result.ok === false) {
+      throw new Error(`${errorPrefix}: ${result.error || "Apps Script rejected request"}`);
     }
   } finally {
     clearTimeout(timeoutId);
