@@ -119,23 +119,21 @@ function updateOrderStatus_(sheet, order) {
   }
 
   sheet.getRange(rowIndex, 17).setValue(order.updated_at || Utilities.formatDate(new Date(), "Asia/Bangkok", "yyyy-MM-dd HH:mm:ss"));
-  sheet.getRange(rowIndex, 1, 1, ORDER_HEADERS.length).setBorder(false, false, true, false, false, false, "#e5e7eb", SpreadsheetApp.BorderStyle.SOLID);
 }
 
 function findOrderRow_(sheet, orderNumber) {
   const lastRow = sheet.getLastRow();
   if (lastRow < 2) return null;
 
-  const values = sheet.getRange(2, 2, lastRow - 1, 1).getValues();
   const target = String(orderNumber).trim().toUpperCase();
-  for (let index = 0; index < values.length; index += 1) {
-    const current = String(values[index][0] || "").trim().toUpperCase();
-    if (current === target) {
-      return index + 2;
-    }
-  }
+  const match = sheet
+    .getRange(2, 2, lastRow - 1, 1)
+    .createTextFinder(target)
+    .matchEntireCell(true)
+    .matchCase(false)
+    .findNext();
 
-  return null;
+  return match ? match.getRow() : null;
 }
 
 function setupOrdersSheet_(sheet) {

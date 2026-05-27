@@ -1,6 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { syncOrderStatusToGoogleSheet } from "@/lib/google-sheets/orders";
+
+export const maxDuration = 30;
 
 interface UpdateOrderInput {
   status?: "pending" | "confirmed" | "preparing" | "ready" | "delivered" | "cancelled";
@@ -101,14 +103,16 @@ export async function PATCH(
       );
     }
 
-    syncOrderStatusToGoogleSheet({
-      orderNumber: updatedOrder.order_number,
-      orderStatus: updatedOrder.status,
-      paymentStatus: updatedOrder.payment_status,
-      adminNote: body.notes,
-      updatedAt: updatedOrder.updated_at,
-    }).catch((error) => {
-      console.error("Google Sheet order status sync error:", error);
+    after(async () => {
+      await syncOrderStatusToGoogleSheet({
+        orderNumber: updatedOrder.order_number,
+        orderStatus: updatedOrder.status,
+        paymentStatus: updatedOrder.payment_status,
+        adminNote: body.notes,
+        updatedAt: updatedOrder.updated_at,
+      }).catch((error) => {
+        console.error("Google Sheet order status sync error:", error);
+      });
     });
 
     return NextResponse.json({
